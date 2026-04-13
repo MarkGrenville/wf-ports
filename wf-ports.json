@@ -1,0 +1,20 @@
+{
+  "id": "portio",
+  "name": "Portio",
+  "description": "Local development port monitor and project manager. Tracks ports, PM2 processes, VS Code tasks, and provides quick access to Firebase/GitHub for all your projects.",
+  "focusIdentifier": "portio",
+  "services": [
+    {
+      "name": "Frontend",
+      "port": 3850,
+      "url": "http://localhost:3850",
+      "purpose": "React web application - main Portio UI"
+    },
+    {
+      "name": "API",
+      "port": 3851,
+      "url": "http://localhost:3851",
+      "purpose": "Express backend server - handles port checking, PM2 management, terminal operations"
+    }
+  ]
+}

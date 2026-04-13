@@ -1,0 +1,27 @@
+#!/bin/bash
+# Portio Alfred Workflow Runner
+# This wrapper ensures node is found via PATH
+
+cd "$(dirname "$0")"
+
+# Source nvm if available
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+
+case "$1" in
+  --list)
+    node scripts/list-projects.js "$2"
+    ;;
+  --actions)
+    node scripts/project-actions.js "$2"
+    ;;
+  --tasks)
+    node scripts/list-tasks.js "$2"
+    ;;
+  --execute)
+    node scripts/execute-action.js "$2"
+    ;;
+  *)
+    echo '{"items":[{"title":"Unknown command","valid":false}]}'
+    ;;
+esac

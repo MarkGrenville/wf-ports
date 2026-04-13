@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Background circle -->
+  <circle cx="50" cy="50" r="48" fill="#1e1e1e" stroke="#007bff" stroke-width="3"/>
+  
+  <!-- Port icon - represents network port -->
+  <circle cx="50" cy="35" r="8" fill="#007bff"/>
+  
+  <!-- Connection lines -->
+  <line x1="50" y1="43" x2="50" y2="55" stroke="#28a745" stroke-width="3" stroke-linecap="round"/>
+  
+  <!-- Multiple ports representation -->
+  <circle cx="35" cy="65" r="6" fill="#28a745"/>
+  <circle cx="50" cy="65" r="6" fill="#28a745"/>
+  <circle cx="65" cy="65" r="6" fill="#28a745"/>
+  
+  <!-- Connecting lines from top port to bottom ports -->
+  <line x1="50" y1="55" x2="35" y2="59" stroke="#28a745" stroke-width="2" opacity="0.6"/>
+  <line x1="50" y1="55" x2="50" y2="59" stroke="#28a745" stroke-width="2" opacity="0.6"/>
+  <line x1="50" y1="55" x2="65" y2="59" stroke="#28a745" stroke-width="2" opacity="0.6"/>
+  
+  <!-- "P" for PortIO -->
+  <text x="50" y="88" font-family="Arial, sans-serif" font-size="20" font-weight="bold" fill="#007bff" text-anchor="middle">P</text>
+</svg>
+
+
+
+
+
+

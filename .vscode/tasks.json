@@ -1,0 +1,30 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Frontend: React Serve",
+      "type": "shell",
+      "command": "pm2 start \"npm start\" --name portio-frontend",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    {
+      "label": "Backend: Server",
+      "type": "shell",
+      "command": "pm2 start \"npm run server\" --name portio-backend",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    {
+      "label": "A. Start Everything",
+      "dependsOn": ["Backend: Server", "Frontend: React Serve"],
+      "problemMatcher": []
+    }
+  ]
+}
