@@ -1,9 +1,7 @@
 # AGENTS.md - PortIO Project
 
 ## Overview
-PortIO is a React + Express app for monitoring and managing local development ports and PM2 processes. It can run as a web app or Electron app.
-
-A native **Swift macOS app** exists at `packages/PortIO-Swift/` - a single-app replacement with native port scanning, process management (replacing PM2), and Firestore sync. Open `PortIO.xcodeproj` and build.
+PortIO is a React + Express app for monitoring and managing local development ports and PM2 processes. Runs entirely as PM2-managed processes; opened in the browser at `http://localhost:3850`.
 
 ## Architecture
 - **Frontend**: React app (`src/`) with SCSS styling, running via PM2 as `portio-frontend`

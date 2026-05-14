@@ -15,14 +15,12 @@ It is **not** a replacement for CI/CD pipelines like GitHub Actions. PortIO is a
 - **Git status** — See the current branch and dirty-file state for every project.
 - **Project auto-discovery** — Drop a small `wf-ports.json` config file in any project and PortIO picks it up automatically.
 - **Terminal & Finder integration** — Open a terminal in the right directory, focus an existing editor window, or reveal files in Finder.
-- **Multiple interfaces** — Run as a web app, an Electron desktop app, or trigger actions from Alfred.
 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────┐
-│                  Clients                     │
-│  React Web UI  ·  Electron App  ·  Alfred   │
+│          Browser at localhost:3850          │
 └────────────────┬────────────────────────────┘
                  │ HTTP (localhost:3851)
 ┌────────────────▼────────────────────────────┐
@@ -35,10 +33,9 @@ It is **not** a replacement for CI/CD pipelines like GitHub Actions. PortIO is a
 |-------|------|
 | Frontend | React 19, React Router, SCSS |
 | Backend | Node.js, Express |
-| Desktop | Electron |
 | Data sync (optional) | Firebase / Firestore |
-| Alfred integration | Node.js scripts calling the local API |
-| Native macOS app (WIP) | Swift / SwiftUI (`packages/PortIO-Swift/`) |
+
+Both the React dev server and the Express API run as PM2-managed processes (`portio-frontend` and `portio-backend`). Open `http://localhost:3850` in your browser.
 
 ## Prerequisites
 
@@ -60,8 +57,9 @@ npm install
 # Copy the example env file and adjust if needed
 cp .env.example .env
 
-# Run the web app (frontend + API server)
-npm run dev
+# Start both processes via PM2
+pm2 start "npm run server" --name portio-backend
+pm2 start "npm start"      --name portio-frontend
 ```
 
 The React UI starts on **http://localhost:3850** and the API server on **http://localhost:3851**.
@@ -70,13 +68,11 @@ The React UI starts on **http://localhost:3850** and the API server on **http://
 
 | Goal | Command |
 |------|---------|
-| Web app (frontend + API) | `npm run dev` |
-| API server only | `npm run server` |
-| React dev server only | `npm start` |
-| Electron (dev) | `npm run electron-dev` |
-| Electron (production build) | `npm run build && npm run electron` |
-| Build macOS `.dmg` | `npm run dist` |
-| Install Alfred workflow | `npm run install-alfred-workflow` |
+| API server (foreground) | `npm run server` |
+| React dev server (foreground) | `npm start` |
+| Production React build | `npm run build` |
+
+In day-to-day use both are managed by PM2 as `portio-backend` and `portio-frontend`.
 
 ## Configuring Your Projects
 
@@ -150,27 +146,15 @@ Copy `.env.example` to `.env` and adjust as needed:
 ```
 wf-ports/
 ├── server.js                 # Express API server
-├── electron-main.js          # Electron main process
-├── preload.js                # Electron preload / IPC bridge
 ├── src/
 │   ├── components/
 │   │   ├── PortMonitor.js    # Main dashboard UI
 │   │   └── ...
-│   ├── services/
-│   │   ├── firebaseConfig.example.js  # Firebase setup template
-│   │   └── ...
-│   └── models/
-│       └── ProjectConfig.js  # Data model documentation
-├── packages/
-│   ├── alfred-portio/        # Alfred workflow
-│   └── PortIO-Swift/         # Native macOS app (WIP)
-├── scripts/                  # Install & build helpers
-└── Documentation/            # Additional docs
+│   └── services/
+│       ├── firebaseConfig.example.js  # Firebase setup template
+│       └── ...
+└── public/                   # Static assets
 ```
-
-## Alfred Workflow
-
-The `packages/alfred-portio/` directory contains an Alfred workflow that talks to the PortIO API. With it you can search projects, open URLs, and trigger actions from Alfred. See `packages/alfred-portio/README.md` for setup instructions.
 
 ## Contributing
 

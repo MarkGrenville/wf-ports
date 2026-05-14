@@ -26,19 +26,9 @@
 .env.test.local
 .env.production.local
 
-# project cache files (contain machine-specific paths)
-projects-cache.json
-packages/alfred-portio/.project-cache.json
-
 # Firebase config (contains project-specific keys)
 src/services/firebaseConfig.js
-packages/PortIO-Swift/PortIO/Resources/GoogleService-Info.plist
 
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-
-# Swift / Xcode build artifacts
-packages/PortIO-Swift/.build/
-packages/PortIO-Swift/PortIO.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
-packages/PortIO-Swift/PortIO.xcodeproj/xcuserdata/

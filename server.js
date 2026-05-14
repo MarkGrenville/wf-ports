@@ -34,8 +34,6 @@ const CONFIG_FILE_NAME = "wf-ports.json";
 const PROJECT_ICONS_DIR = path.join(__dirname, "project-icons");
 // Store docs outside public folder to avoid React hot-reload triggering
 const DOCS_FILE_PATH = path.join(__dirname, "portio-docs.md");
-// Store cached projects for Alfred workflow
-const PROJECTS_CACHE_PATH = path.join(__dirname, "projects-cache.json");
 
 // Middleware
 app.use(cors());
@@ -50,79 +48,6 @@ app.use(
 // Health check endpoint
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", message: "Port killer service is running" });
-});
-
-// Get cached projects endpoint (for Alfred workflow)
-app.get("/api/projects", async (req, res) => {
-  try {
-    // Try to read from cache first
-    try {
-      const cacheContent = await fs.readFile(PROJECTS_CACHE_PATH, "utf8");
-      const cachedData = JSON.parse(cacheContent);
-      console.log(`Returning ${cachedData.projects.length} cached projects`);
-      return res.json(cachedData);
-    } catch (cacheError) {
-      // Cache doesn't exist or is invalid, scan projects
-      console.log("Projects cache not found, scanning...");
-    }
-
-    // If no cache, do a quick scan
-    const configFiles = await findConfigFiles(PROJECTS_BASE_PATH);
-    const projects = [];
-
-    for (const {
-      configPath,
-      projectPath,
-      directoryName,
-      pathExists,
-      vscodeTasksInfo,
-      gitInfo,
-      firebaseInfo,
-    } of configFiles) {
-      try {
-        const configContent = await fs.readFile(configPath, "utf8");
-        const projectConfig = JSON.parse(configContent);
-
-        const projectId =
-          projectConfig.id ||
-          directoryName.toLowerCase().replace(/[^a-z0-9]/g, "-");
-
-        const startAllTasks = vscodeTasksInfo
-          ? findStartAllTasks(vscodeTasksInfo.tasks)
-          : [];
-
-        const project = {
-          ...projectConfig,
-          id: projectId,
-          projectPath: projectPath,
-          configPath: configPath,
-          directoryName: directoryName,
-          pathExists: pathExists,
-          vscodeTasksInfo: vscodeTasksInfo,
-          startAllTasks: startAllTasks,
-          hasStartAllTasks: startAllTasks.length > 0,
-          gitInfo: gitInfo,
-          firebaseInfo: firebaseInfo,
-        };
-
-        projects.push(project);
-      } catch (error) {
-        console.log(`Invalid wf-ports.json at ${configPath}: ${error.message}`);
-      }
-    }
-
-    // Cache the results
-    const responseData = { projects, cachedAt: new Date().toISOString() };
-    await fs.writeFile(PROJECTS_CACHE_PATH, JSON.stringify(responseData, null, 2));
-
-    res.json(responseData);
-  } catch (error) {
-    console.error("Error getting projects:", error);
-    res.status(500).json({
-      error: "Failed to get projects",
-      details: error.message,
-    });
-  }
 });
 
 // Get documentation content
@@ -1508,11 +1433,6 @@ app.get("/api/scan-projects", async (req, res) => {
         );
       }
     }
-
-    // Cache the projects for Alfred workflow
-    const cacheData = { projects, cachedAt: new Date().toISOString() };
-    await fs.writeFile(PROJECTS_CACHE_PATH, JSON.stringify(cacheData, null, 2));
-    console.log(`📦 Cached ${projects.length} projects for Alfred workflow`);
 
     // Send response first, then generate docs (to avoid React hot-reload interrupting the request)
     res.json({ projects });
