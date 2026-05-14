@@ -2,7 +2,7 @@
 
 # dependencies
 /node_modules
-/packages/*/node_modules
+/frontend/node_modules
 /.pnp
 .pnp.js
 
@@ -11,6 +11,9 @@
 
 # production
 /build
+/frontend/build
+/frontend/.svelte-kit
+/frontend/.vite
 
 # generated project icons (copied during rescan)
 /project-icons
