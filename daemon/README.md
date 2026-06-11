@@ -1,71 +1,84 @@
 # portio-daemon
 
-Background process that polls ports / PM2 / git on this Mac and pushes
-everything into Firestore. Listens for command docs and executes them.
+Background process that polls ports / PM2 / git on this Mac and pushes everything into a local Firestore emulator. Also exposes a localhost HTTP endpoint for snappy action commands from the UI.
 
-## Setup
+## Setup (emulator-only mode)
 
-### 1. Mint a Firebase Admin service account
+The daemon requires the Firebase Firestore emulator to be reachable at `127.0.0.1:8181`. The emulator is itself a PM2-managed process — `portio-emulator`.
 
-The daemon needs admin credentials for Firestore project `portio-ea1df`.
+### One-time
 
-1. Open https://console.firebase.google.com/project/portio-ea1df/settings/serviceaccounts/adminsdk
-2. Click **Generate new private key**, save the JSON file.
-3. Move it into place:
-   ```bash
-   mkdir -p ~/.portio
-   mv ~/Downloads/portio-ea1df-firebase-adminsdk-*.json ~/.portio/firebase-service-account.json
-   chmod 600 ~/.portio/firebase-service-account.json
-   ```
+You need Java (any JDK 11+) and `firebase-tools`. Both are installed:
 
-### 2. Start the daemon under PM2
+```bash
+java -version    # OpenJDK 21+
+firebase --version  # 15+
+```
+
+Repo-level config files at the project root:
+
+- [firebase.json](../firebase.json) — emulator ports
+- [.firebaserc](../.firebaserc) — points at the demo project `demo-portio`
+
+### Start everything from cold
 
 ```bash
 cd ~/Projects/portio
-pm2 start daemon/index.js --name portio-daemon
+
+pm2 start "firebase emulators:start --only firestore --project demo-portio" \
+  --name portio-emulator --cwd $PWD --time
+# wait ~10 s for "All emulators ready"
+
+FIRESTORE_EMULATOR_HOST=127.0.0.1:8181 \
+  pm2 start ./daemon/index.js --name portio-daemon --time --update-env
+
+pm2 start "npm --prefix ./frontend run dev -- --port 3852 --host" \
+  --name portio-frontend-svelte
+
 pm2 save
 ```
 
-The daemon will:
+## How it works
 
-- Scan `~/Projects/*/wf-ports.json` immediately, then every 5 min plus on file change.
-- Poll ports every 10 s, PM2 every 5 s, git every 30 s.
-- Listen for new docs in the `commands/` collection in Firestore.
-- Run `caffeinate -dimsu -w <pid>` to keep the Mac awake while the daemon is running
-  (set `PORTIO_DISABLE_CAFFEINATE=1` to disable).
-
-### 3. Verify
-
-Within a few seconds you should see:
-
-- `pm2 logs portio-daemon` printing scan / poller messages.
-- New docs in Firestore: `projects/`, `liveStatus/`, `pm2/`, `system/portioDocs`,
-  `system/usedPortsExport`.
+```
+portio-daemon
+  - reads PROJECTS_BASE_PATH (~/Projects) and discovers wf-ports.json files
+  - polls every:
+      ports     10 s   -> writes liveStatus/{id}
+      pm2        5 s   -> writes pm2/{name}
+      git       30 s   -> merges into projects/{id}.gitInfo
+      projects   5 m + chokidar -> writes projects/{id} + system/portioDocs + system/usedPortsExport
+  - exposes POST http://127.0.0.1:3853/cmd that runs HANDLERS synchronously and returns the result
+  - keeps the Mac awake via `caffeinate -dimsu -w <pid>` while running
+```
 
 ## Configuration (env vars)
 
 | Var | Default | Purpose |
 |-----|---------|---------|
-| `GOOGLE_APPLICATION_CREDENTIALS` | `~/.portio/firebase-service-account.json` | Service account JSON path |
+| `FIRESTORE_EMULATOR_HOST` | (none) | Set to `127.0.0.1:8181` to use the emulator. When set, no service account is read. |
+| `GOOGLE_APPLICATION_CREDENTIALS` | `~/.portio/firebase-service-account.json` | Cloud Firestore service account JSON. **Only used when `FIRESTORE_EMULATOR_HOST` is unset.** |
 | `PROJECTS_BASE_PATH` | `~/Projects` | Where to scan for `wf-ports.json` |
-| `AGENT_RUNNER_HOSTNAME` | `os.hostname()` | Used in command claim transactions |
+| `AGENT_RUNNER_HOSTNAME` | `os.hostname()` | Used in command claim transactions (legacy Firestore command queue) |
+| `PORTIO_DAEMON_HTTP_PORT` | `3853` | Localhost HTTP port |
 | `PORTIO_DISABLE_CAFFEINATE` | `0` | Set `1` to skip the no-sleep wrapper |
 
 ## Module map
 
 ```
 daemon/
-  index.js              entry: starts pollers + command listener
-  firestore.js          firebase-admin init
+  index.js                  entry: starts http + 4 pollers + Firestore command listener
+  firestore.js              firebase-admin init (emulator-aware)
+  http.js                   Express on 127.0.0.1:3853, POST /cmd, GET /health
   pollers/
-    projects.js         5 min + chokidar -> projects/{id}, system/portioDocs, system/usedPortsExport
-    ports.js            10 s -> liveStatus/{id}
-    pm2.js              5 s -> pm2/{name}
-    git.js              30 s -> projects/{id}.gitInfo
+    projects.js             5 min + chokidar -> projects/{id}, system/portioDocs, system/usedPortsExport
+    ports.js                10 s -> liveStatus/{id}
+    pm2.js                  5 s -> pm2/{name}, fingerprint excludes CPU/mem to keep writes minimal
+    git.js                  30 s -> projects/{id}.gitInfo
   commands/
-    listener.js         onSnapshot pending, atomic claim, dispatch
-    sweep.js            delete commands > 1 h old
-    handlers/index.js   one function per command type
+    listener.js             legacy Firestore command queue (UI no longer writes here, kept as fallback)
+    sweep.js                drops command docs > 1 h old
+    handlers/index.js       one function per command type, called by both http.js and listener.js
   shared/
     exec.js, lsof.js, pm2.js, git.js, firebase-info.js,
     scan.js, applescript.js, task-runner.js, docs.js
@@ -73,7 +86,7 @@ daemon/
 
 ## Command types
 
-The Svelte UI dispatches these by writing a doc to `commands/{auto-id}`:
+The Svelte UI POSTs `{type, payload}` to `/cmd`. Each handler returns its own result shape, wrapped in `{ ok: true, result }`.
 
 | type | payload | result |
 |------|---------|--------|
@@ -93,5 +106,17 @@ The Svelte UI dispatches these by writing a doc to `commands/{auto-id}`:
 | `executeStartAllTasks` | `{ projects[] }` | `{ results: [...] }` |
 | `rescanProjects` | `{}` | `{ rescanned: true }` |
 
-Lifecycle: `pending` → `running` → `done` / `error`.
-Docs older than 1 h are swept automatically.
+## Persistence
+
+The emulator runs in-memory by default. A daemon or emulator restart wipes Firestore. Pollers regenerate everything within ~5 s, so the only visible cost is a brief empty dashboard right after restart.
+
+To turn on persistence (writes data to `./emulator-data/` between runs):
+
+```bash
+pm2 delete portio-emulator
+pm2 start "firebase emulators:start --only firestore --project demo-portio --import emulator-data --export-on-exit emulator-data" \
+  --name portio-emulator --cwd ~/Projects/portio --time
+pm2 save
+```
+
+Note that PM2's default kill signal won't trigger emulator's export-on-exit. Use `pm2 stop portio-emulator` (which sends SIGINT) before reboots if you care about persistence.

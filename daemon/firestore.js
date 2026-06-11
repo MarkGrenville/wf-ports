@@ -11,6 +11,18 @@ let db = null;
 function init() {
   if (initialized) return { admin, db };
 
+  if (process.env.FIRESTORE_EMULATOR_HOST) {
+    const projectId = process.env.GCLOUD_PROJECT || "demo-portio";
+    admin.initializeApp({ projectId });
+    db = admin.firestore();
+    db.settings({ ignoreUndefinedProperties: true });
+    initialized = true;
+    console.log(
+      `[firestore] connected to emulator at ${process.env.FIRESTORE_EMULATOR_HOST} (project ${projectId})`,
+    );
+    return { admin, db };
+  }
+
   const credentialsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS || DEFAULT_SA_PATH;
 
   if (!fs.existsSync(credentialsPath)) {

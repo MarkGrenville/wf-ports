@@ -1,11 +1,7 @@
-import {
-  addDoc,
-  collection,
-  doc,
-  onSnapshot,
-  serverTimestamp,
-} from "firebase/firestore";
-import { getDb } from "$lib/firebase";
+// Action transport: localhost-only HTTP to the daemon (`http://127.0.0.1:3853/cmd`).
+// Sub-100 ms round trip, doesn't touch Firestore quota. Live state still flows
+// through Firestore subscriptions in the stores.
+
 import type { Command } from "$lib/types";
 
 export type CommandType =
@@ -29,36 +25,52 @@ export type DispatchOptions = {
   timeoutMs?: number;
 };
 
+const DAEMON_BASE = "http://127.0.0.1:3853";
+
 export async function dispatch(
   type: CommandType,
   payload: Record<string, unknown> = {},
   options: DispatchOptions = {},
 ): Promise<Command> {
-  const db = getDb();
-  const ref = await addDoc(collection(db, "commands"), {
-    type,
-    payload,
-    status: "pending",
-    createdAt: serverTimestamp(),
-  });
-
-  return await new Promise((resolve, reject) => {
-    const timeoutMs = options.timeoutMs ?? 60_000;
-    const timer = setTimeout(() => {
-      unsub();
-      reject(new Error(`Command ${type} timed out after ${timeoutMs}ms`));
-    }, timeoutMs);
-
-    const unsub = onSnapshot(doc(db, "commands", ref.id), (snap) => {
-      if (!snap.exists()) return;
-      const data = snap.data() as Omit<Command, "id">;
-      if (data.status === "done" || data.status === "error") {
-        clearTimeout(timer);
-        unsub();
-        resolve({ id: ref.id, ...data });
-      }
+  const timeoutMs = options.timeoutMs ?? 60_000;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${DAEMON_BASE}/cmd`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ type, payload }),
+      signal: controller.signal,
     });
-  });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok || body.ok === false) {
+      const err = body.error || `HTTP ${res.status}`;
+      return {
+        id: "local",
+        type,
+        payload,
+        status: "error",
+        error: err,
+      };
+    }
+    return {
+      id: "local",
+      type,
+      payload,
+      status: "done",
+      result: body.result ?? null,
+    };
+  } catch (err) {
+    return {
+      id: "local",
+      type,
+      payload,
+      status: "error",
+      error: (err as Error).message || String(err),
+    };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 class CommandsStore {

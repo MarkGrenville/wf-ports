@@ -1,5 +1,6 @@
 const { spawn } = require("child_process");
 const firestore = require("./firestore");
+const http = require("./http");
 const projectsPoller = require("./pollers/projects");
 const portsPoller = require("./pollers/ports");
 const pm2Poller = require("./pollers/pm2");
@@ -31,6 +32,7 @@ async function main() {
   const { admin, db } = firestore.init();
 
   startCaffeinate();
+  http.start(db, admin);
   projectsPoller.start(db);
   setTimeout(() => portsPoller.start(db), 3000);
   pm2Poller.start(db);

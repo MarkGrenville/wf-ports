@@ -19,8 +19,11 @@ async function tick(db) {
   try {
     const procs = await listProcesses();
     if (procs === null) return;
+    // Fingerprint excludes CPU + memory because they fluctuate every second
+    // and would force a full-collection rewrite on every tick (blew through
+    // the Firestore free tier in hours).
     const fingerprint = procs
-      .map((p) => `${p.name}:${p.status}:${p.pid}:${Math.round(p.cpu)}`)
+      .map((p) => `${p.name}:${p.status}:${p.pid}:${p.restarts}`)
       .sort()
       .join("|");
     if (fingerprint === lastWritten) return;
@@ -36,8 +39,6 @@ async function tick(db) {
         name: p.name,
         pm_id: p.pm_id,
         status: p.status,
-        cpu: p.cpu,
-        memory: p.memory,
         pid: p.pid,
         restarts: p.restarts,
         uptime: p.uptime,

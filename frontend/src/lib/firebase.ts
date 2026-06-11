@@ -1,14 +1,16 @@
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
-import { getFirestore, type Firestore } from "firebase/firestore";
+import { connectFirestoreEmulator, getFirestore, type Firestore } from "firebase/firestore";
 
+// Emulator-only mode. The cloud Firebase project (portio-ea1df) is no longer used.
+// `demo-` prefix tells the SDK this is an emulator project — no real auth needed.
 const firebaseConfig = {
-  apiKey: "AIzaSyD43e22v94e6FNyBFjqQvdHKEOdko_doRs",
-  authDomain: "portio-ea1df.firebaseapp.com",
-  projectId: "portio-ea1df",
-  storageBucket: "portio-ea1df.firebasestorage.app",
-  messagingSenderId: "853069629248",
-  appId: "1:853069629248:web:b2f94a344b9df008ff5ca5",
+  projectId: "demo-portio",
+  apiKey: "demo",
+  appId: "demo",
 };
+
+const EMULATOR_HOST = "127.0.0.1";
+const EMULATOR_PORT = 8181;
 
 let app: FirebaseApp | null = null;
 let db: Firestore | null = null;
@@ -20,6 +22,9 @@ export function getFirebaseApp(): FirebaseApp {
 }
 
 export function getDb(): Firestore {
-  if (!db) db = getFirestore(getFirebaseApp());
+  if (!db) {
+    db = getFirestore(getFirebaseApp());
+    connectFirestoreEmulator(db, EMULATOR_HOST, EMULATOR_PORT);
+  }
   return db;
 }
