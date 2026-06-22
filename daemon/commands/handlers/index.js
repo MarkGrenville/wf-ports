@@ -84,9 +84,21 @@ async function handlePm2LogsTerminal(cmd) {
 }
 
 async function handleExecuteTask(cmd) {
-  const { task, projectPath, projectId } = cmd.payload;
+  const { task, projectPath, projectId, allTasks } = cmd.payload;
   if (!task || !projectPath || !projectId) {
     throw new Error("payload.task, projectPath, projectId required");
+  }
+  if (Array.isArray(task.dependsOn) && task.dependsOn.length > 0) {
+    const tasks = allTasks || [];
+    const dependent = taskRunner.resolveDependentTasks(task, tasks);
+    if (dependent.length === 0) {
+      throw new Error(`Compound task "${task.label}" has dependsOn but none of the referenced tasks were found`);
+    }
+    const results = [];
+    for (const t of dependent) {
+      results.push(await taskRunner.executeTask(t, projectPath, projectId));
+    }
+    return { compound: true, taskLabel: task.label, results };
   }
   return await taskRunner.executeTask(task, projectPath, projectId);
 }
@@ -108,7 +120,7 @@ async function handleExecuteStartAllTasks(cmd) {
 }
 
 async function handleRescanProjects(cmd, ctx) {
-  await rescanAndWrite(ctx.db);
+  await rescanAndWrite(ctx.state);
   return { rescanned: true };
 }
 
@@ -130,4 +142,16 @@ const HANDLERS = {
   rescanProjects: handleRescanProjects,
 };
 
-module.exports = { HANDLERS };
+// Commands that change port/pm2 state. http.js re-snapshots after these so the
+// UI gets the confirmed new state pushed almost immediately.
+const MUTATING_TYPES = new Set([
+  "killPort",
+  "killPorts",
+  "pm2Restart",
+  "pm2Delete",
+  "pm2DeleteAll",
+  "executeTask",
+  "executeStartAllTasks",
+]);
+
+module.exports = { HANDLERS, MUTATING_TYPES };

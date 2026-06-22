@@ -1,5 +1,4 @@
-import { collection, onSnapshot } from "firebase/firestore";
-import { getDb } from "$lib/firebase";
+import { socket } from "$lib/socket.svelte";
 import type { Project } from "$lib/types";
 
 class ProjectsStore {
@@ -10,18 +9,12 @@ class ProjectsStore {
 
   start() {
     if (this.unsub) return;
-    const db = getDb();
-    this.unsub = onSnapshot(
-      collection(db, "projects"),
-      (snap) => {
-        this.list = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Project, "id">) }));
-        this.loaded = true;
-        this.error = null;
-      },
-      (err) => {
-        this.error = err.message;
-      },
-    );
+    socket.connect();
+    this.unsub = socket.onTopic("projects", (data) => {
+      this.list = (data as Project[]) ?? [];
+      this.loaded = true;
+      this.error = null;
+    });
   }
 
   stop() {

@@ -54,7 +54,7 @@
         <p>Loading export data…</p>
       </div>
     {:else if !data}
-      <p class="muted">No export data in Firestore yet. Click "Refresh" to generate.</p>
+      <p class="muted">No export data yet. Click "Refresh" to generate.</p>
     {:else}
       <nav class="tabs">
         <button class:on={tab === "summary"} onclick={() => (tab = "summary")}>Summary</button>

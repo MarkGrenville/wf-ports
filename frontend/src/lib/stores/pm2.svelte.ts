@@ -1,5 +1,4 @@
-import { collection, onSnapshot } from "firebase/firestore";
-import { getDb } from "$lib/firebase";
+import { socket } from "$lib/socket.svelte";
 import type { Pm2Process } from "$lib/types";
 
 class Pm2Store {
@@ -9,9 +8,9 @@ class Pm2Store {
 
   start() {
     if (this.unsub) return;
-    const db = getDb();
-    this.unsub = onSnapshot(collection(db, "pm2"), (snap) => {
-      this.list = snap.docs.map((d) => d.data() as Pm2Process);
+    socket.connect();
+    this.unsub = socket.onTopic("pm2", (data) => {
+      this.list = (data as Pm2Process[]) ?? [];
       this.loaded = true;
     });
   }

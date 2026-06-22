@@ -1,17 +1,16 @@
-import { doc, onSnapshot } from "firebase/firestore";
-import { getDb } from "$lib/firebase";
+import { socket } from "$lib/socket.svelte";
 
 class SystemDocStore<T> {
   data = $state<T | null>(null);
   loaded = $state(false);
   private unsub: (() => void) | null = null;
-  constructor(private docId: string) {}
+  constructor(private topic: string) {}
 
   start() {
     if (this.unsub) return;
-    const db = getDb();
-    this.unsub = onSnapshot(doc(db, "system", this.docId), (snap) => {
-      this.data = snap.exists() ? (snap.data() as T) : null;
+    socket.connect();
+    this.unsub = socket.onTopic(this.topic, (data) => {
+      this.data = (data as T) ?? null;
       this.loaded = true;
     });
   }

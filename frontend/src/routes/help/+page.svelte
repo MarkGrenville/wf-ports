@@ -32,7 +32,7 @@
         <p>Loading documentation…</p>
       </div>
     {:else if !portioDocsStore.data}
-      <p class="muted">No docs in Firestore yet. Click "Refresh Docs" to generate.</p>
+      <p class="muted">No docs yet. Click "Refresh Docs" to generate.</p>
     {:else}
       <article>{@html html}</article>
     {/if}

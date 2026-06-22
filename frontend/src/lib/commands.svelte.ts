@@ -1,6 +1,6 @@
 // Action transport: localhost-only HTTP to the daemon (`http://127.0.0.1:3853/cmd`).
-// Sub-100 ms round trip, doesn't touch Firestore quota. Live state still flows
-// through Firestore subscriptions in the stores.
+// Sub-100 ms round trip. Live state flows separately through the WebSocket
+// subscriptions in the stores (see socket.svelte.ts).
 
 import type { Command } from "$lib/types";
 
@@ -76,6 +76,13 @@ export async function dispatch(
 class CommandsStore {
   inflight = $state<Record<string, boolean>>({});
 
+  // Optimistic state: while a kill/delete is in flight we immediately hide the
+  // affected ports/processes so the UI feels instant. The daemon re-snapshots
+  // right after the action and pushes the confirmed state over the socket, so
+  // we just clear the optimistic flag when the command resolves.
+  hiddenPorts = $state<Record<number, boolean>>({});
+  hiddenPm2 = $state<Record<string, boolean>>({});
+
   async run(
     key: string,
     type: CommandType,
@@ -94,6 +101,32 @@ class CommandsStore {
 
   isRunning(key: string): boolean {
     return !!this.inflight[key];
+  }
+
+  setPortsHidden(ports: number[], hidden: boolean) {
+    const next = { ...this.hiddenPorts };
+    for (const p of ports) {
+      if (hidden) next[p] = true;
+      else delete next[p];
+    }
+    this.hiddenPorts = next;
+  }
+
+  isPortHidden(port: number): boolean {
+    return !!this.hiddenPorts[port];
+  }
+
+  setPm2Hidden(names: string[], hidden: boolean) {
+    const next = { ...this.hiddenPm2 };
+    for (const n of names) {
+      if (hidden) next[n] = true;
+      else delete next[n];
+    }
+    this.hiddenPm2 = next;
+  }
+
+  isPm2Hidden(name: string): boolean {
+    return !!this.hiddenPm2[name];
   }
 }
 

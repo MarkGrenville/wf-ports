@@ -1,6 +1,7 @@
-import { collection, onSnapshot } from "firebase/firestore";
-import { getDb } from "$lib/firebase";
+import { socket } from "$lib/socket.svelte";
 import type { LiveStatus } from "$lib/types";
+
+type LiveStatusEntry = LiveStatus & { id: string };
 
 class LiveStatusStore {
   byProject = $state<Record<string, LiveStatus>>({});
@@ -9,10 +10,11 @@ class LiveStatusStore {
 
   start() {
     if (this.unsub) return;
-    const db = getDb();
-    this.unsub = onSnapshot(collection(db, "liveStatus"), (snap) => {
+    socket.connect();
+    this.unsub = socket.onTopic("liveStatus", (data) => {
+      const entries = (data as LiveStatusEntry[]) ?? [];
       const next: Record<string, LiveStatus> = {};
-      for (const d of snap.docs) next[d.id] = d.data() as LiveStatus;
+      for (const entry of entries) next[entry.id] = entry;
       this.byProject = next;
       this.loaded = true;
     });

@@ -1,95 +1,42 @@
-# Cutover from React+Express to SvelteKit+daemon (emulator-only)
+# Cutover history: React+Express -> SvelteKit + Firebase emulator -> SvelteKit + WebSocket daemon
 
-This is the one-time migration from the old PortIO stack
-(`portio-frontend` React on :3850 + `portio-backend` Express on :3851)
-to the new stack: `portio-emulator` (local Firestore) + `portio-daemon` (background poller + localhost HTTP) + `portio-frontend-svelte` SvelteKit UI on :3850.
+PortIO went through three stacks. This document records the final state and how we got here.
 
-## Current state of the repo
+## Final stack (current)
 
-- **Old stack (still running, optional rollback)**: `portio-backend` ([server.js](server.js)) on :3851, `portio-frontend` ([src/](src/)) on :3850.
-- **New stack (live, side-by-side)**:
-  - `portio-emulator` — local Firebase Firestore emulator on `127.0.0.1:8181` (hub on `:4444`).
-  - `portio-daemon` — pollers + localhost HTTP at `127.0.0.1:3853`. Connects to the emulator via `FIRESTORE_EMULATOR_HOST=127.0.0.1:8181`.
-  - `portio-frontend-svelte` — SvelteKit dev server on **:3852**. Open `http://localhost:3852` to see it.
+Two PM2 processes, no database, no Firebase:
 
-Nothing in the new stack uses the cloud Firebase project anymore. The `portio-ea1df` project sits idle in Firebase console; you can delete it when comfortable.
+| Process | Role | Port |
+|---|---|---|
+| `portio-daemon` | [daemon/index.js](daemon/index.js) — in-memory state hub, WebSocket push, POST /cmd | 3853 (HTTP + WS) |
+| `portio-frontend-svelte` | SvelteKit dev server, the UI | 3850 |
 
-## Step 1 — Verify the new stack works
+Open `http://localhost:3850`. The dashboard is pushed live over `ws://127.0.0.1:3853/ws` and repopulates within ~1 s of a daemon restart.
 
-Open `http://localhost:3852`. Within ~5 s:
+## History
 
-- Dashboard table populates from the emulator (live).
-- Active port count + PM2 column update without manual refresh.
-- Click **Kill** / **Restart** / **View Logs** / **Open Finder** — each completes in 50–200 ms via the daemon's localhost HTTP, no Firestore round-trip required for the action.
-- `/help` renders generated markdown.
-- `/export` shows the summary tabs.
+1. **React + Express** — `portio-frontend` (React, :3850) + `portio-backend` (Express, :3851). Polled over HTTP; sluggish, manual refreshes.
+2. **SvelteKit + Firebase emulator** — `portio-emulator` (local Firestore, :8181) + `portio-daemon` (pollers writing to the emulator) + `portio-frontend-svelte` (:3852). Live via `onSnapshot`, but four hops (daemon -> admin SDK -> emulator -> web SDK -> UI), 5–10 s poll latency, and per-port `lsof` timeouts caused status flapping.
+3. **SvelteKit + WebSocket daemon (current)** — the emulator and both legacy React/Express processes were retired. The daemon now holds state in memory and pushes diffs straight to the UI over a WebSocket. Port detection is a single atomic `lsof` snapshot every 1 s, and mutating commands trigger an immediate re-snapshot, so kills/restarts/runs reflect almost instantly with no flapping.
 
-## Step 2 — Flip ports (cutover)
+## What was removed in the final cutover
 
-When you're confident:
-
-```bash
-# Stop the old React + Express pair
-pm2 stop  portio-frontend portio-backend
-pm2 delete portio-frontend portio-backend
-
-# Move SvelteKit onto :3850 (the bookmarked URL)
-pm2 delete portio-frontend-svelte
-pm2 start "npm --prefix /Users/markgrenville/Projects/portio/frontend run dev -- --port 3850 --host" \
-  --name portio-frontend
-pm2 save
-```
-
-Bookmark `http://localhost:3850` continues to work, now showing the SvelteKit UI backed by the local emulator.
-
-After cutover the running PM2 processes for PortIO are exactly:
-
-- `portio-emulator` — Firestore on :8181
-- `portio-daemon` — HTTP on :3853
-- `portio-frontend` — SvelteKit on :3850
-
-## Step 3 — (After a week of stability) Cleanup
-
-Only delete the old code once you're sure you don't need to roll back.
-
-The cleanup will:
-
-- Delete `server.js`, `src/`, `public/`, `project-icons/`.
-- Drop root `package.json` deps: `react`, `react-dom`, `react-router-dom`, `react-icons`, `react-scripts`, `firebase` (web SDK now only in `frontend/`), `cors`, `express`, `axios`, `sass` if unused.
-- Update [README.md](README.md).
-- Optionally delete the cloud `portio-ea1df` Firebase project from console.
-- Optionally delete `~/.portio/firebase-service-account.json` (no longer read by the daemon in emulator mode).
+- PM2: deleted `portio-emulator`, `portio-backend`, `portio-frontend`. Moved `portio-frontend-svelte` from :3852 to :3850.
+- Daemon: deleted `daemon/firestore.js`, `daemon/commands/listener.js`, `daemon/commands/sweep.js`. Dropped `firebase-admin`; added `ws`.
+- Frontend: deleted `src/lib/firebase.ts`; dropped the `firebase` web SDK; stores now subscribe to WebSocket topics via `src/lib/socket.svelte.ts`.
+- Repo root: deleted the legacy React app (`src/`, `public/`, `server.js`), `firebase.json`, `.firebaserc`. Pruned root `package.json` to daemon-only deps.
 
 ## Cold-start everything from scratch
-
-If you reboot the Mac and PM2 didn't restore (or you want to start fresh):
 
 ```bash
 cd ~/Projects/portio
 
-pm2 start "firebase emulators:start --only firestore --project demo-portio" \
-  --name portio-emulator --cwd $PWD --time
-# wait ~10 s for "All emulators ready"
+pm2 start ./daemon/index.js --name portio-daemon --time
 
-FIRESTORE_EMULATOR_HOST=127.0.0.1:8181 \
-  pm2 start ./daemon/index.js --name portio-daemon --time --update-env
-
-pm2 start "npm --prefix ./frontend run dev -- --port 3852 --host" \
+pm2 start "npm --prefix ./frontend run dev -- --port 3850 --host" \
   --name portio-frontend-svelte
-# (after Step 2 above this name becomes portio-frontend on :3850)
 
 pm2 save
 ```
 
-Emulator data is in-memory; first 5–10 s after a fresh start, the dashboard will be empty while the pollers repopulate.
-
-## Rolling back (any point before Step 3 cleanup)
-
-```bash
-pm2 delete portio-frontend portio-frontend-svelte portio-daemon portio-emulator 2>/dev/null
-pm2 start "npm --prefix /Users/markgrenville/Projects/portio run server" --name portio-backend
-pm2 start "npm --prefix /Users/markgrenville/Projects/portio start"      --name portio-frontend
-pm2 save
-```
-
-The old code is untouched on disk; both stacks coexist until cleanup.
+No emulator, no warm-up wait. The pollers repopulate the dashboard within ~1 s.

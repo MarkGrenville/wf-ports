@@ -1,12 +1,10 @@
 const { spawn } = require("child_process");
-const firestore = require("./firestore");
+const state = require("./state");
 const http = require("./http");
 const projectsPoller = require("./pollers/projects");
 const portsPoller = require("./pollers/ports");
 const pm2Poller = require("./pollers/pm2");
 const gitPoller = require("./pollers/git");
-const commandListener = require("./commands/listener");
-const commandSweep = require("./commands/sweep");
 
 let caffeinateProcess = null;
 
@@ -29,16 +27,19 @@ function startCaffeinate() {
 
 async function main() {
   console.log("[daemon] starting portio-daemon");
-  const { admin, db } = firestore.init();
 
   startCaffeinate();
-  http.start(db, admin);
-  projectsPoller.start(db);
-  setTimeout(() => portsPoller.start(db), 3000);
-  pm2Poller.start(db);
-  setTimeout(() => gitPoller.start(db), 6000);
-  commandListener.start(db, admin);
-  commandSweep.start(db);
+
+  const refreshers = {
+    ports: () => portsPoller.refresh(),
+    pm2: () => pm2Poller.refresh(),
+  };
+  http.start(state, refreshers);
+
+  projectsPoller.start(state);
+  portsPoller.start(state);
+  pm2Poller.start(state);
+  gitPoller.start();
 
   console.log("[daemon] ready");
 }

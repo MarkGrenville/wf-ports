@@ -1,4 +1,5 @@
 const { getGitInfo } = require("../shared/git");
+const projectsPoller = require("./projects");
 
 const TICK_MS = 30_000;
 const lastFingerprint = new Map();
@@ -14,37 +15,33 @@ function fingerprintFor(info) {
   ].join("|");
 }
 
-async function checkOne(db, project) {
+async function checkOne(project) {
   if (!project.projectPath) return;
   try {
     const info = await getGitInfo(project.projectPath);
     const fp = fingerprintFor(info);
     if (lastFingerprint.get(project.id) === fp) return;
     lastFingerprint.set(project.id, fp);
-    await db
-      .collection("projects")
-      .doc(project.id)
-      .set({ gitInfo: info, gitInfoLastUpdated: new Date() }, { merge: true });
+    projectsPoller.setGitInfo(project.id, info);
   } catch (err) {
     console.error(`[git] ${project.id} failed:`, err.message);
   }
 }
 
-async function tick(db) {
+async function tick() {
   try {
-    const snap = await db.collection("projects").get();
-    const projects = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const projects = projectsPoller.getCurrentProjects();
     for (const p of projects) {
-      await checkOne(db, p);
+      await checkOne(p);
     }
   } catch (err) {
     console.error("[git] tick failed:", err.message);
   }
 }
 
-function start(db) {
-  setTimeout(() => tick(db), 4000);
-  setInterval(() => tick(db), TICK_MS);
+function start() {
+  setTimeout(tick, 4000);
+  setInterval(tick, TICK_MS);
   console.log(`[git] polling every ${TICK_MS}ms`);
 }
 

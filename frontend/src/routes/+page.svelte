@@ -3,6 +3,7 @@
   import { liveStatusStore } from "$lib/stores/liveStatus.svelte";
   import { pm2Store } from "$lib/stores/pm2.svelte";
   import { commandsStore } from "$lib/commands.svelte";
+  import { socket } from "$lib/socket.svelte";
   import type { Project, VsCodeTask } from "$lib/types";
   import {
     RefreshCw,
@@ -19,7 +20,6 @@
 
   let detailsModal: Project | null = $state(null);
   let selectedTaskByProject = $state<Record<string, string>>({});
-  let pm2ActionDraft = $state<Record<string, string>>({});
 
   function isProjectActive(projectId: string): boolean {
     const portsActive = liveStatusStore.forProject(projectId)?.services?.some((s) => s.isRunning) ?? false;
@@ -59,10 +59,11 @@
 
   function liveServicesFor(project: Project) {
     const live = liveStatusStore.forProject(project.id);
-    return live?.services ?? (project.services ?? []).map((s) => ({ ...s, isRunning: false, pid: null, processName: null }));
+    const base = live?.services ?? (project.services ?? []).map((s) => ({ ...s, isRunning: false, pid: null, processName: null }));
+    return base.map((s) => (commandsStore.isPortHidden(s.port) ? { ...s, isRunning: false } : s));
   }
   function pm2For(projectId: string) {
-    return pm2Store.forProject(projectId);
+    return pm2Store.forProject(projectId).filter((p) => !commandsStore.isPm2Hidden(p.name));
   }
   function activePortCount(project: Project) {
     return liveServicesFor(project).filter((s) => s.isRunning).length;
@@ -78,12 +79,22 @@
     await commandsStore.run("minimize", "minimizeCursorWindows");
   }
   async function killOnePort(project: Project, port: number) {
-    await commandsStore.run(`killPort:${project.id}:${port}`, "killPort", { port });
+    commandsStore.setPortsHidden([port], true);
+    try {
+      await commandsStore.run(`killPort:${project.id}:${port}`, "killPort", { port });
+    } finally {
+      commandsStore.setPortsHidden([port], false);
+    }
   }
   async function killAllPorts(project: Project) {
     const ports = liveServicesFor(project).filter((s) => s.isRunning).map((s) => s.port);
     if (ports.length === 0) return;
-    await commandsStore.run(`killPorts:${project.id}`, "killPorts", { ports });
+    commandsStore.setPortsHidden(ports, true);
+    try {
+      await commandsStore.run(`killPorts:${project.id}`, "killPorts", { ports });
+    } finally {
+      commandsStore.setPortsHidden(ports, false);
+    }
   }
   async function openFinder(project: Project) {
     if (!project.projectPath) return;
@@ -109,13 +120,17 @@
     await commandsStore.run(`pm2restart:${name}`, "pm2Restart", { pm2Name: name, projectId });
   }
   async function pm2Delete(name: string, projectId: string) {
-    await commandsStore.run(`pm2delete:${name}`, "pm2Delete", { pm2Name: name, projectId });
+    commandsStore.setPm2Hidden([name], true);
+    try {
+      await commandsStore.run(`pm2delete:${name}`, "pm2Delete", { pm2Name: name, projectId });
+    } finally {
+      commandsStore.setPm2Hidden([name], false);
+    }
   }
   async function pm2Logs(name: string, projectId: string) {
     await commandsStore.run(`pm2logs:${name}`, "pm2LogsTerminal", { pm2Name: name, projectId });
   }
   async function pm2Action(name: string, projectId: string, action: string) {
-    pm2ActionDraft[name] = "";
     if (action === "logs") await pm2Logs(name, projectId);
     else if (action === "restart") await pm2Restart(name, projectId);
     else if (action === "delete") await pm2Delete(name, projectId);
@@ -123,15 +138,27 @@
 
   async function stopAll(project: Project) {
     const services = liveServicesFor(project);
-    const ports = services.filter((s) => s.isRunning).map((s) => s.port);
+    const runningPorts = services.filter((s) => s.isRunning).map((s) => s.port);
+    // Kill the project's entire configured port set, not just the ports we
+    // currently detect as running. This clears orphaned/leftover processes
+    // squatting on any of the project's ports so a restart comes up clean.
+    const configuredPorts = (project.services ?? []).map((s) => s.port);
+    const ports = [...new Set([...configuredPorts, ...runningPorts])].filter(
+      (p): p is number => typeof p === "number",
+    );
+    const procNames = pm2For(project.id).map((p) => p.name);
     const key = `stopAll:${project.id}`;
     commandsStore.inflight = { ...commandsStore.inflight, [key]: true };
+    commandsStore.setPortsHidden(ports, true);
+    commandsStore.setPm2Hidden(procNames, true);
     try {
       await commandsStore.run(`pm2DeleteAll:${project.id}`, "pm2DeleteAll", { projectId: project.id });
       if (ports.length > 0) {
         await commandsStore.run(`killPorts:${project.id}`, "killPorts", { ports });
       }
     } finally {
+      commandsStore.setPortsHidden(ports, false);
+      commandsStore.setPm2Hidden(procNames, false);
       const next = { ...commandsStore.inflight };
       delete next[key];
       commandsStore.inflight = next;
@@ -158,7 +185,11 @@
       <h1 class="menu-title"><img src="/logo.svg" alt="PortIO" /></h1>
     </div>
     <div class="menu-center">
-      <span class="last-updated">{projects.length} projects · live</span>
+      {#if socket.connected}
+        <span class="last-updated">{projects.length} projects · live</span>
+      {:else}
+        <span class="daemon-offline" title="Lost connection to portio-daemon"><span class="offline-dot"></span> daemon offline</span>
+      {/if}
     </div>
     <div class="menu-right">
       <a class="help-link" href="/help" title="Help"><button><HelpCircle size={14} /> Help</button></a>
@@ -176,7 +207,7 @@
   {#if !projectsStore.loaded}
     <div class="loading">
       <div class="loading-spinner"></div>
-      <p>Loading projects from Firestore…</p>
+      <p>{socket.connected ? "Loading projects…" : "Connecting to daemon…"}</p>
     </div>
   {:else if projects.length === 0}
     <div class="no-projects">
@@ -319,8 +350,13 @@
                           <span class="pm2-name" title={proc.name}>{proc.name}</span>
                           <select
                             class="pm2-actions-select-compact"
-                            value={pm2ActionDraft[proc.name] || ""}
-                            onchange={(e) => pm2Action(proc.name, project.id, (e.currentTarget as HTMLSelectElement).value)}
+                            value=""
+                            onchange={(e) => {
+                              const sel = e.currentTarget as HTMLSelectElement;
+                              const action = sel.value;
+                              sel.value = "";
+                              if (action) pm2Action(proc.name, project.id, action);
+                            }}
                             disabled={commandsStore.isRunning(`pm2logs:${proc.name}`) || commandsStore.isRunning(`pm2restart:${proc.name}`) || commandsStore.isRunning(`pm2delete:${proc.name}`)}
                             title="Process actions"
                           >
@@ -483,6 +519,9 @@
   .menu-title img { height: 32px; width: auto; }
   .menu-center { display: flex; align-items: center; gap: 10px; }
   .last-updated { font-size: 13px; color: #999; }
+  .daemon-offline { font-size: 13px; color: #dc3545; display: inline-flex; align-items: center; gap: 6px; font-weight: 500; }
+  .offline-dot { width: 8px; height: 8px; border-radius: 50%; background: #dc3545; animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
   .menu-right { display: flex; align-items: center; gap: 10px; }
   .menu-right button { padding: 6px 12px; font-size: 13px; }
   .help-link, .export-link { text-decoration: none; }

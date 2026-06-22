@@ -1,32 +1,17 @@
 {
-  "name": "local-port-monitor",
-  "version": "0.1.0",
-  "description": "A local development tool to monitor and manage ports for your projects with kill functionality",
+  "name": "portio-daemon",
+  "version": "0.2.0",
+  "description": "Local development port + PM2 manager. Background daemon that snapshots ports/PM2/git and pushes live state to the SvelteKit UI over a localhost WebSocket.",
   "private": true,
+  "main": "daemon/index.js",
+  "scripts": {
+    "daemon": "node daemon/index.js"
+  },
   "dependencies": {
-    "axios": "^1.10.0",
     "chokidar": "^5.0.0",
     "cors": "^2.8.5",
     "express": "^4.18.2",
-    "firebase": "^11.10.0",
-    "firebase-admin": "^13.10.0",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
-    "react-icons": "^5.5.0",
-    "react-router-dom": "^7.6.3",
-    "react-scripts": "5.0.1",
-    "sass": "^1.89.2",
-    "simple-git": "^3.36.0"
-  },
-  "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "server": "node server.js"
-  },
-  "eslintConfig": {
-    "extends": [
-      "react-app"
-    ]
+    "ws": "^7.5.10"
   },
   "browserslist": {
     "production": [
@@ -39,6 +24,5 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
-  },
-  "proxy": "http://localhost:3851"
+  }
 }

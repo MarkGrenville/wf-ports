@@ -8,13 +8,13 @@
       "name": "Frontend",
       "port": 3850,
       "url": "http://localhost:3850",
-      "purpose": "React web application - main Portio UI"
+      "purpose": "SvelteKit UI - main Portio dashboard"
     },
     {
-      "name": "API",
-      "port": 3851,
-      "url": "http://localhost:3851",
-      "purpose": "Express backend server - handles port checking, PM2 management, terminal operations"
+      "name": "Daemon",
+      "port": 3853,
+      "url": "http://localhost:3853/health",
+      "purpose": "Background daemon - port/PM2/git snapshots, WebSocket push, POST /cmd actions"
     }
   ]
 }
