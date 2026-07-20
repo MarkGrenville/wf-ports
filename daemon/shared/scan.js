@@ -133,7 +133,17 @@ async function scanAllProjects(basePath) {
       console.error(`[scan] invalid wf-ports.json at ${c.configPath}: ${err.message}`);
     }
   }
-  return projects;
+  const seen = new Map();
+  const deduped = [];
+  for (const p of projects) {
+    if (seen.has(p.id)) {
+      console.warn(`[scan] duplicate project id "${p.id}" at ${p.configPath} — already registered from ${seen.get(p.id)}; skipping`);
+    } else {
+      seen.set(p.id, p.configPath);
+      deduped.push(p);
+    }
+  }
+  return deduped;
 }
 
 module.exports = {
