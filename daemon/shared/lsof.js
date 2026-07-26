@@ -24,7 +24,7 @@ async function snapshotListeningPorts() {
   }
   if (raw == null) return null;
 
-  const byPort = new Map(); // port (number) -> { pid, command }
+  const byPort = new Map(); // port (number) -> { pid, command, bindAddress }
   let pid = null;
   let command = null;
   for (const line of raw.split("\n")) {
@@ -41,7 +41,15 @@ async function snapshotListeningPorts() {
       if (idx === -1) continue;
       const port = parseInt(rest.slice(idx + 1), 10);
       if (!port) continue;
-      if (!byPort.has(port)) byPort.set(port, { pid, command });
+      const host = rest.slice(0, idx);
+      const isNetwork = host === "*" || host === "0.0.0.0" || host === "::";
+      const existing = byPort.get(port);
+      if (!existing) {
+        byPort.set(port, { pid, command, bindAddress: host, isNetwork });
+      } else if (isNetwork && !existing.isNetwork) {
+        existing.bindAddress = host;
+        existing.isNetwork = true;
+      }
     }
   }
   return byPort;

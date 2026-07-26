@@ -47,6 +47,7 @@ export type Project = {
   faviconPath?: string;
   faviconDataUrl?: string | null;
   services?: ServiceConfig[];
+  hiddenServices?: number[];
   vscodeTasksInfo?: { tasksPath?: string; tasks: VsCodeTask[]; version?: string } | null;
   startAllTasks?: VsCodeTask[];
   hasStartAllTasks?: boolean;
@@ -64,7 +65,7 @@ export type VsCodeTask = {
 };
 
 export type LiveStatus = {
-  services: (ServiceConfig & { isRunning: boolean; pid: number | null; processName: string | null })[];
+  services: (ServiceConfig & { isRunning: boolean; pid: number | null; processName: string | null; isNetwork?: boolean })[];
   lastChecked?: { toDate?: () => Date } | Date;
 };
 
@@ -80,6 +81,24 @@ export type Pm2Process = {
   execPath: string | null;
   cwd: string | null;
   projectId: string;
+};
+
+export type CIRun = {
+  id: number;
+  workflowName: string;
+  status: "queued" | "in_progress" | "completed";
+  conclusion: "success" | "failure" | "cancelled" | "skipped" | null;
+  branch: string;
+  event: string;
+  createdAt: string;
+  updatedAt: string;
+  url: string;
+};
+
+export type CIStatus = {
+  projectId: string;
+  runs: CIRun[];
+  lastPolled: string;
 };
 
 export type Command = {

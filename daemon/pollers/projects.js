@@ -66,6 +66,14 @@ function setGitInfo(projectId, info) {
   publishProjects();
 }
 
+function patchProject(projectId, fields) {
+  const idx = currentProjects.findIndex((p) => p.id === projectId);
+  if (idx === -1) return false;
+  currentProjects[idx] = { ...currentProjects[idx], ...fields };
+  publishProjects();
+  return true;
+}
+
 function getCurrentProjects() {
   return currentProjects;
 }
@@ -75,11 +83,17 @@ function start(state) {
   rescanAndWrite();
   setInterval(() => rescanAndWrite(), RESCAN_INTERVAL_MS);
 
-  const watcher = chokidar.watch(`${PROJECTS_BASE_PATH}/*/wf-ports.json`, {
-    ignoreInitial: true,
-    awaitWriteFinish: { stabilityThreshold: 500, pollInterval: 100 },
-    depth: 2,
-  });
+  const watcher = chokidar.watch(
+    [
+      `${PROJECTS_BASE_PATH}/*/.webfootprint/ports.json`,
+      `${PROJECTS_BASE_PATH}/*/wf-ports.json`,
+    ],
+    {
+      ignoreInitial: true,
+      awaitWriteFinish: { stabilityThreshold: 500, pollInterval: 100 },
+      depth: 3,
+    }
+  );
   let debounceTimer = null;
   const trigger = () => {
     if (debounceTimer) clearTimeout(debounceTimer);
@@ -88,7 +102,9 @@ function start(state) {
   watcher.on("add", trigger);
   watcher.on("change", trigger);
   watcher.on("unlink", trigger);
-  console.log(`[projects] watching ${PROJECTS_BASE_PATH}/*/wf-ports.json`);
+  console.log(
+    `[projects] watching ${PROJECTS_BASE_PATH}/*/.webfootprint/ports.json (+ legacy wf-ports.json)`
+  );
 }
 
 module.exports = {
@@ -96,4 +112,5 @@ module.exports = {
   rescanAndWrite,
   setGitInfo,
   getCurrentProjects,
+  patchProject,
 };

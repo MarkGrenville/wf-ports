@@ -4,6 +4,7 @@ const { Server: WebSocketServer } = require("ws");
 const { HANDLERS, MUTATING_TYPES } = require("./commands/handlers");
 
 const PORT = Number(process.env.PORTIO_DAEMON_HTTP_PORT || 3853);
+const HOST = process.env.PORTIO_DAEMON_HOST || "0.0.0.0";
 
 function start(state, refreshers = {}) {
   const app = express();
@@ -25,8 +26,6 @@ function start(state, refreshers = {}) {
     }
     try {
       const result = await handler({ type, payload: payload || {} }, { state });
-      // Re-snapshot immediately so the WS push confirms the new reality within
-      // a few hundred ms instead of waiting for the next poll tick.
       if (MUTATING_TYPES.has(type)) {
         await Promise.all([
           refreshers.ports?.(),
@@ -45,8 +44,8 @@ function start(state, refreshers = {}) {
     }
   });
 
-  const server = app.listen(PORT, "127.0.0.1", () => {
-    console.log(`[http] listening on http://127.0.0.1:${PORT}`);
+  const server = app.listen(PORT, HOST, () => {
+    console.log(`[http] listening on http://${HOST}:${PORT}`);
   });
 
   // WebSocket push: full snapshot on connect, then per-topic diffs.
@@ -66,7 +65,25 @@ function start(state, refreshers = {}) {
       }
     }
   });
-  console.log(`[http] websocket on ws://127.0.0.1:${PORT}/ws`);
+  console.log(`[http] websocket on ws://${HOST}:${PORT}/ws`);
+
+  // Publish LAN IP so the frontend can rewrite service URLs for network access
+  // (e.g. http://192.168.1.194:4920). Hostname/.local is unreliable across devices.
+  const { execSync } = require("child_process");
+  let networkHost = "localhost";
+  for (const iface of ["en0", "en1"]) {
+    try {
+      const ip = execSync(`ipconfig getifaddr ${iface}`, { encoding: "utf8" }).trim();
+      if (ip) {
+        networkHost = ip;
+        break;
+      }
+    } catch {
+      /* try next iface */
+    }
+  }
+  state.set("network", { host: networkHost, daemonPort: PORT });
+  console.log(`[http] network host: ${networkHost}`);
 }
 
 module.exports = { start };

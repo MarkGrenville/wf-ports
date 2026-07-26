@@ -9,8 +9,13 @@ type ServerMsg = SnapshotMsg | UpdateMsg;
 
 type TopicCallback = (data: unknown) => void;
 
-const DAEMON_WS = "ws://127.0.0.1:3853/ws";
+const DAEMON_PORT = 3853;
 const MAX_BACKOFF_MS = 10_000;
+
+function daemonWsUrl(): string {
+  if (typeof window === "undefined") return `ws://127.0.0.1:${DAEMON_PORT}/ws`;
+  return `ws://${window.location.hostname}:${DAEMON_PORT}/ws`;
+}
 
 class SocketClient {
   connected = $state(false);
@@ -25,7 +30,7 @@ class SocketClient {
     if (typeof window === "undefined") return;
     if (this.ws) return;
 
-    const ws = new WebSocket(DAEMON_WS);
+    const ws = new WebSocket(daemonWsUrl());
     this.ws = ws;
 
     ws.onopen = () => {

@@ -28,6 +28,7 @@ async function tick() {
           isRunning: !!hit,
           pid: hit?.pid ?? null,
           processName: hit?.command ?? null,
+          isNetwork: hit?.isNetwork ?? false,
         };
       });
       liveStatus.push({ id: project.id, services });

@@ -13,7 +13,7 @@ It is **not** a replacement for CI/CD pipelines like GitHub Actions. PortIO is a
 - **VS Code task runner** — Trigger VS Code tasks (including "Start All" compound tasks) without switching windows.
 - **Quick links** — Jump straight to a project's GitHub repo, Firebase Console, or Google Cloud Logs.
 - **Git status** — See the current branch and dirty-file state for every project.
-- **Project auto-discovery** — Drop a small `wf-ports.json` config file in any project and PortIO picks it up automatically.
+- **Project auto-discovery** — Drop a small `.webfootprint/ports.json` config file in any project and PortIO picks it up automatically.
 - **Terminal & Finder integration** — Open a terminal in the right directory, focus an existing editor window, or reveal files in Finder.
 
 ## Architecture
@@ -76,9 +76,9 @@ In day-to-day use both are managed by PM2 as `portio-backend` and `portio-fronte
 
 ## Configuring Your Projects
 
-PortIO discovers projects by scanning a base directory for `wf-ports.json` files. Set the `PROJECTS_BASE_PATH` environment variable in your `.env` (defaults to `~/Projects`).
+PortIO discovers projects by scanning a base directory for `.webfootprint/ports.json` files (legacy root-level `wf-ports.json` is still supported). Set the `PROJECTS_BASE_PATH` environment variable in your `.env` (defaults to `~/Projects`).
 
-Create a `wf-ports.json` in any project root:
+Create `.webfootprint/ports.json` in any project root:
 
 ```json
 {
@@ -103,7 +103,7 @@ Create a `wf-ports.json` in any project root:
 }
 ```
 
-### `wf-ports.json` Fields
+### `.webfootprint/ports.json` Fields
 
 | Field | Required | Description |
 |-------|----------|-------------|
@@ -130,7 +130,7 @@ PortIO can optionally sync project configurations to Firestore so they persist a
 2. Copy `src/services/firebaseConfig.example.js` to `src/services/firebaseConfig.js` and fill in your Firebase config.
 3. Set up Firestore security rules appropriate for your use case.
 
-If you don't need cloud sync, PortIO works fine without Firebase — project data is read directly from `wf-ports.json` files on disk.
+If you don't need cloud sync, PortIO works fine without Firebase — project data is read directly from `.webfootprint/ports.json` files on disk.
 
 ## Environment Variables
 

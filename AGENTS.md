@@ -22,8 +22,9 @@ Browser (Chrome :3850)
   --> POST /cmd (http://127.0.0.1:3853/cmd) -- action commands
 
 portio-daemon
-  -- in-memory state hub (daemon/state.js): topics projects/liveStatus/pm2/portioDocs/usedPortsExport
+  -- in-memory state hub (daemon/state.js): topics projects/liveStatus/pm2/portioDocs/usedPortsExport/ciStatus
   -- lsof / pm2 / osascript ---------------------------> macOS + ~/Projects/*
+  -- GitHub Actions API (ci poller) ------------------> api.github.com (needs GITHUB_TOKEN env var)
 ```
 
 - **State**: pollers in the daemon write topics into the in-memory hub. The hub broadcasts a diff over the WebSocket only when a topic actually changes. The Svelte stores subscribe per-topic and re-render live. Sub-millisecond pushes, one hop.
@@ -39,6 +40,7 @@ portio-daemon
 | `pm2` | daemon (2 s poll) | UI | Pm2Process[] (CPU/memory dropped to keep diffs stable) |
 | `portioDocs` | daemon (rescan) | UI (`/help`) | Generated markdown |
 | `usedPortsExport` | daemon (rescan) | UI (`/export`) | Aggregated port export |
+| `ciStatus` | daemon (30 s / 15 s adaptive) | UI | `CIStatus[]` — GitHub Actions workflow runs per project |
 
 State is **in-memory** — a daemon restart rebuilds everything within ~1 s. While the daemon is down the UI shows a "daemon offline" badge and auto-reconnects.
 
@@ -46,7 +48,7 @@ State is **in-memory** — a daemon restart rebuilds everything within ~1 s. Whi
 
 ```
 daemon/
-  index.js              entry: starts caffeinate, http + websocket, 4 pollers
+  index.js              entry: starts caffeinate, http + websocket, 5 pollers
   state.js              in-memory topic hub (diff + broadcast)
   http.js               Express + ws on 127.0.0.1:3853: POST /cmd, GET /health, /ws
   pollers/
@@ -54,8 +56,9 @@ daemon/
     ports.js            1 s -> "liveStatus" via a single lsof snapshot
     pm2.js              2 s -> "pm2"
     git.js             30 s -> feeds gitInfo back into projects.js
+    ci.js              30 s (15 s when active) -> "ciStatus" via GitHub Actions API; needs GITHUB_TOKEN
   commands/handlers/index.js   one function per command type; MUTATING_TYPES trigger an immediate re-snapshot
-  shared/{exec,lsof,pm2,git,firebase-info,scan,applescript,task-runner,docs}.js
+  shared/{exec,lsof,pm2,git,github,firebase-info,scan,applescript,task-runner,docs}.js
 ```
 
 ## Frontend code map (SvelteKit, Svelte 5 runes)
@@ -68,6 +71,7 @@ frontend/
     projects.svelte.ts           socket.onTopic("projects")
     liveStatus.svelte.ts         socket.onTopic("liveStatus")
     pm2.svelte.ts                socket.onTopic("pm2")
+    ci.svelte.ts                 socket.onTopic("ciStatus") — GitHub Actions runs per project
     system.svelte.ts             portioDocs + usedPortsExport topics
   src/lib/commands.svelte.ts     dispatch(type, payload) -> POST /cmd; optimistic hidden ports/pm2
   src/routes/+layout.svelte      starts/stops all stores
@@ -84,6 +88,7 @@ frontend/
 - The daemon's command handlers live in [daemon/commands/handlers/index.js](daemon/commands/handlers/index.js), dispatched by `http.js` via the `HANDLERS` map. Types in `MUTATING_TYPES` trigger an immediate ports + pm2 re-snapshot.
 - PM2 process names follow `{projectId}-{taskName}`. The pm2 poller uses the prefix to derive `projectId`.
 - Port detection uses one `lsof -nP -iTCP -sTCP:LISTEN` snapshot per tick; port killing uses `lsof -ti:PORT | xargs kill -9`. On lsof failure the poller keeps the last known state (no flapping).
+- CI polling uses the GitHub Actions REST API. Set `GITHUB_TOKEN` env var with a PAT that has `repo` or `actions:read` scope. Without it the CI poller is silently disabled. The poller adapts its tick rate: 15s when any run is in-progress/queued, 30s when idle. Rate-limit responses trigger automatic backoff.
 - AppleScript runs through helpers in [daemon/shared/applescript.js](daemon/shared/applescript.js) via `runOsascript` (stdin-piped, multi-line safe).
 
 ## Running / restarting

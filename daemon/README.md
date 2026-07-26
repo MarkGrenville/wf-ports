@@ -23,7 +23,7 @@ Open `http://localhost:3850`. The dashboard populates within ~1 s and stays live
 
 ```
 portio-daemon
-  - reads PROJECTS_BASE_PATH (~/Projects) and discovers wf-ports.json files
+  - reads PROJECTS_BASE_PATH (~/Projects) and discovers .webfootprint/ports.json files (legacy wf-ports.json still supported)
   - holds all state in daemon/state.js (an in-memory topic hub)
   - polls every:
       ports      1 s   -> one `lsof` snapshot of all listeners -> state "liveStatus"
@@ -47,7 +47,7 @@ portio-daemon
 
 | Var | Default | Purpose |
 |-----|---------|---------|
-| `PROJECTS_BASE_PATH` | `~/Projects` | Where to scan for `wf-ports.json` |
+| `PROJECTS_BASE_PATH` | `~/Projects` | Where to scan for `.webfootprint/ports.json` |
 | `PORTIO_DAEMON_HTTP_PORT` | `3853` | Localhost HTTP + WebSocket port |
 | `PORTIO_DISABLE_CAFFEINATE` | `0` | Set `1` to skip the no-sleep wrapper |
 

@@ -3,8 +3,26 @@ const path = require("path");
 const { getGitInfo } = require("./git");
 const { getFirebaseInfo } = require("./firebase-info");
 
-const CONFIG_FILE_NAME = "wf-ports.json";
+const CONFIG_DIR = ".webfootprint";
+const CONFIG_FILE_NAME = "ports.json";
+const LEGACY_CONFIG_FILE_NAME = "wf-ports.json";
 const SKIP_DIRS = new Set(["node_modules", ".git", ".next", "dist", "build", ".idea"]);
+
+async function resolveConfigPath(dirPath) {
+  const preferred = path.join(dirPath, CONFIG_DIR, CONFIG_FILE_NAME);
+  try {
+    await fs.access(preferred);
+    return preferred;
+  } catch {}
+
+  const legacy = path.join(dirPath, LEGACY_CONFIG_FILE_NAME);
+  try {
+    await fs.access(legacy);
+    return legacy;
+  } catch {}
+
+  return null;
+}
 
 async function scanVSCodeTasks(projectPath) {
   const tasksPath = path.join(projectPath, ".vscode", "tasks.json");
@@ -51,9 +69,8 @@ async function findConfigFiles(dirPath, maxDepth = 2, currentDepth = 0) {
     return results;
   }
 
-  const configPath = path.join(dirPath, CONFIG_FILE_NAME);
-  try {
-    await fs.access(configPath);
+  const configPath = await resolveConfigPath(dirPath);
+  if (configPath) {
     const [vscodeTasksInfo, gitInfo, firebaseInfo] = await Promise.all([
       scanVSCodeTasks(dirPath),
       getGitInfo(dirPath),
@@ -68,7 +85,7 @@ async function findConfigFiles(dirPath, maxDepth = 2, currentDepth = 0) {
       gitInfo,
       firebaseInfo,
     });
-  } catch {}
+  }
 
   for (const entry of entries) {
     if (entry.isDirectory() && !SKIP_DIRS.has(entry.name) && !entry.name.startsWith(".")) {
@@ -130,17 +147,20 @@ async function scanAllProjects(basePath) {
         faviconDataUrl,
       });
     } catch (err) {
-      console.error(`[scan] invalid wf-ports.json at ${c.configPath}: ${err.message}`);
+      console.error(`[scan] invalid ports config at ${c.configPath}: ${err.message}`);
     }
   }
   return projects;
 }
 
 module.exports = {
+  CONFIG_DIR,
   CONFIG_FILE_NAME,
+  LEGACY_CONFIG_FILE_NAME,
   scanAllProjects,
   findConfigFiles,
   findStartAllTasks,
   scanVSCodeTasks,
   readFaviconBase64,
+  resolveConfigPath,
 };
