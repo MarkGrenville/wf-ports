@@ -20,14 +20,13 @@ function fingerprintFor(runs) {
 
 async function checkOne(project) {
   const repoUrl = project.gitInfo?.repoUrl;
-  const branch = project.gitInfo?.branch;
-  if (!repoUrl || !branch) return;
+  if (!repoUrl) return;
 
   const parsed = parseOwnerRepo(repoUrl);
   if (!parsed) return;
 
   try {
-    const runs = await getWorkflowRuns(parsed.owner, parsed.repo, branch, GITHUB_TOKEN);
+    const runs = await getWorkflowRuns(parsed.owner, parsed.repo, GITHUB_TOKEN);
     if (runs === null) return;
 
     const fp = fingerprintFor(runs);

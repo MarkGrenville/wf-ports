@@ -9,7 +9,7 @@ function parseOwnerRepo(repoUrl) {
   return { owner: m[1], repo: m[2] };
 }
 
-async function getWorkflowRuns(owner, repo, branch, token) {
+async function getWorkflowRuns(owner, repo, token, branch = "main") {
   if (Date.now() < backoffUntil) return null;
 
   const url = `${GITHUB_API}/repos/${owner}/${repo}/actions/runs?per_page=5&branch=${encodeURIComponent(branch)}`;
