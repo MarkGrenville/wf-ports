@@ -1,0 +1,25 @@
+{
+  "id": "my-project",
+  "name": "My Project",
+  "description": "Brief project description shown in the details popup",
+  "focusIdentifier": "my-project",
+  "faviconPath": "/Users/markgrenville/Projects/my-project/frontend/static/favicon.svg",
+  "projectBackendPath": "/Users/markgrenville/Projects/my-project/backend",
+  "firebaseProjectId": "my-project-firebase-id",
+  "pm2Prefix": "my-project",
+  "hiddenServices": [],
+  "services": [
+    {
+      "name": "Frontend",
+      "port": 3000,
+      "url": "http://localhost:3000",
+      "purpose": "SvelteKit dev server"
+    },
+    {
+      "name": "Backend API",
+      "port": 3001,
+      "url": "http://localhost:3001",
+      "purpose": "Express REST API"
+    }
+  ]
+}

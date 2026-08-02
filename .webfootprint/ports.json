@@ -3,6 +3,7 @@
   "name": "Portio",
   "description": "Local development port monitor and project manager. Tracks ports, PM2 processes, VS Code tasks, and provides quick access to Firebase/GitHub for all your projects.",
   "focusIdentifier": "portio",
+  "faviconPath": "/Users/markgrenville/Projects/portio/frontend/static/favicon.svg",
   "services": [
     {
       "name": "Frontend",
@@ -16,5 +17,8 @@
       "url": "http://localhost:3853/health",
       "purpose": "Background daemon - port/PM2/git snapshots, WebSocket push, POST /cmd actions"
     }
+  ],
+  "hiddenServices": [
+    3853
   ]
 }

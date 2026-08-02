@@ -7,5 +7,6 @@ export default defineConfig({
     port: Number(process.env.PORT || 3850),
     strictPort: false,
     host: true,
+    allowedHosts: true,
   },
 });

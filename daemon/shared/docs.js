@@ -39,9 +39,9 @@ These are common system and web ports that should not be used for local developm
 
 ---
 
-## wf-ports.json Reference
+## .webfootprint/ports.json Reference
 
-The \`wf-ports.json\` file configures how PortIO monitors your project. Place it in your project root directory.
+The \`.webfootprint/ports.json\` file configures how PortIO monitors your project. Place it at \`<project>/.webfootprint/ports.json\`. Legacy root-level \`wf-ports.json\` files are still detected.
 
 ### Required Fields
 

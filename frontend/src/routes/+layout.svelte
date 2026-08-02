@@ -5,6 +5,8 @@
   import { liveStatusStore } from "$lib/stores/liveStatus.svelte";
   import { pm2Store } from "$lib/stores/pm2.svelte";
   import { portioDocsStore, usedPortsStore } from "$lib/stores/system.svelte";
+  import { networkStore } from "$lib/stores/network.svelte";
+  import { ciStore } from "$lib/stores/ci.svelte";
 
   let { children } = $props();
 
@@ -14,12 +16,16 @@
     pm2Store.start();
     portioDocsStore.start();
     usedPortsStore.start();
+    networkStore.start();
+    ciStore.start();
     return () => {
       projectsStore.stop();
       liveStatusStore.stop();
       pm2Store.stop();
       portioDocsStore.stop();
       usedPortsStore.stop();
+      networkStore.stop();
+      ciStore.stop();
     };
   });
 </script>

@@ -1,8 +1,12 @@
+const fs = require("fs");
+const path = require("path");
 const { killPort } = require("../../shared/lsof");
 const pm2 = require("../../shared/pm2");
 const applescript = require("../../shared/applescript");
 const taskRunner = require("../../shared/task-runner");
-const { rescanAndWrite } = require("../../pollers/projects");
+const { rescanAndWrite, patchProject } = require("../../pollers/projects");
+
+const ARCHIVE_DIR = "/Users/markgrenville/Archived-Projects";
 
 async function handleKillPort(cmd) {
   const { port } = cmd.payload;
@@ -119,6 +123,50 @@ async function handleExecuteStartAllTasks(cmd) {
   return { results };
 }
 
+async function handleArchiveProject(cmd, ctx) {
+  const { projectPath, projectId } = cmd.payload;
+  if (!projectPath) throw new Error("payload.projectPath required");
+  if (!fs.existsSync(projectPath)) throw new Error(`Project path not found: ${projectPath}`);
+
+  fs.mkdirSync(ARCHIVE_DIR, { recursive: true });
+
+  const folderName = path.basename(projectPath);
+  let dest = path.join(ARCHIVE_DIR, folderName);
+
+  // Avoid clobbering an existing archive with the same name
+  if (fs.existsSync(dest)) {
+    dest = `${dest}-${Date.now()}`;
+  }
+
+  fs.renameSync(projectPath, dest);
+
+  // Rescan so the project disappears from the UI immediately
+  await rescanAndWrite(ctx.state);
+  return { archived: true, from: projectPath, to: dest };
+}
+
+async function handleToggleServiceVisibility(cmd) {
+  const { configPath, port, projectId } = cmd.payload;
+  if (!configPath) throw new Error("payload.configPath required");
+  if (port == null) throw new Error("payload.port required");
+  if (!projectId) throw new Error("payload.projectId required");
+
+  const raw = fs.readFileSync(configPath, "utf8");
+  const cfg = JSON.parse(raw);
+  const hidden = Array.isArray(cfg.hiddenServices) ? cfg.hiddenServices : [];
+
+  if (hidden.includes(port)) {
+    cfg.hiddenServices = hidden.filter((p) => p !== port);
+  } else {
+    cfg.hiddenServices = [...hidden, port];
+  }
+
+  fs.writeFileSync(configPath, JSON.stringify(cfg, null, 2) + "\n");
+
+  patchProject(projectId, { hiddenServices: cfg.hiddenServices });
+  return { hiddenServices: cfg.hiddenServices };
+}
+
 async function handleRescanProjects(cmd, ctx) {
   await rescanAndWrite(ctx.state);
   return { rescanned: true };
@@ -140,6 +188,8 @@ const HANDLERS = {
   executeTask: handleExecuteTask,
   executeStartAllTasks: handleExecuteStartAllTasks,
   rescanProjects: handleRescanProjects,
+  archiveProject: handleArchiveProject,
+  toggleServiceVisibility: handleToggleServiceVisibility,
 };
 
 // Commands that change port/pm2 state. http.js re-snapshots after these so the
@@ -152,6 +202,7 @@ const MUTATING_TYPES = new Set([
   "pm2DeleteAll",
   "executeTask",
   "executeStartAllTasks",
+  "archiveProject",
 ]);
 
 module.exports = { HANDLERS, MUTATING_TYPES };

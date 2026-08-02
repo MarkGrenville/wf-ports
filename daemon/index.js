@@ -5,6 +5,7 @@ const projectsPoller = require("./pollers/projects");
 const portsPoller = require("./pollers/ports");
 const pm2Poller = require("./pollers/pm2");
 const gitPoller = require("./pollers/git");
+const ciPoller = require("./pollers/ci");
 
 let caffeinateProcess = null;
 
@@ -40,6 +41,7 @@ async function main() {
   portsPoller.start(state);
   pm2Poller.start(state);
   gitPoller.start();
+  ciPoller.start(state);
 
   console.log("[daemon] ready");
 }

@@ -1,7 +1,3 @@
-// Action transport: localhost-only HTTP to the daemon (`http://127.0.0.1:3853/cmd`).
-// Sub-100 ms round trip. Live state flows separately through the WebSocket
-// subscriptions in the stores (see socket.svelte.ts).
-
 import type { Command } from "$lib/types";
 
 export type CommandType =
@@ -19,13 +15,20 @@ export type CommandType =
   | "pm2LogsTerminal"
   | "executeTask"
   | "executeStartAllTasks"
-  | "rescanProjects";
+  | "rescanProjects"
+  | "archiveProject"
+  | "toggleServiceVisibility";
 
 export type DispatchOptions = {
   timeoutMs?: number;
 };
 
-const DAEMON_BASE = "http://127.0.0.1:3853";
+const DAEMON_PORT = 3853;
+
+function daemonBase(): string {
+  if (typeof window === "undefined") return `http://127.0.0.1:${DAEMON_PORT}`;
+  return `http://${window.location.hostname}:${DAEMON_PORT}`;
+}
 
 export async function dispatch(
   type: CommandType,
@@ -36,7 +39,7 @@ export async function dispatch(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetch(`${DAEMON_BASE}/cmd`, {
+    const res = await fetch(`${daemonBase()}/cmd`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ type, payload }),
