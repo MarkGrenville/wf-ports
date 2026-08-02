@@ -6,6 +6,7 @@
   import { socket } from "$lib/socket.svelte";
   import { networkStore } from "$lib/stores/network.svelte";
   import { ciStore } from "$lib/stores/ci.svelte";
+  import { cronStore } from "$lib/stores/cron.svelte";
   import type { Project, VsCodeTask, CIRun } from "$lib/types";
   import {
     RefreshCw,
@@ -29,7 +30,17 @@
     XCircle,
     Loader,
     CircleDot,
+    BookOpen,
+    Timer,
   } from "lucide-svelte";
+
+  const swaggerUrl = $derived(
+    `http://${
+      networkStore.isNetworkMode && networkStore.networkHost
+        ? networkStore.networkHost
+        : "127.0.0.1"
+    }:${networkStore.data?.daemonPort ?? 3853}/api-docs`,
+  );
 
   let isMobile = $state(false);
   const mobileQuery = typeof window !== "undefined" ? window.matchMedia("(max-width: 768px)") : null;
@@ -341,6 +352,15 @@
         {/if}
       </button>
       <a class="help-link" href="/help" title="Help"><button><HelpCircle size={14} /> Help</button></a>
+      <a class="swagger-link" href={swaggerUrl} target="_blank" rel="noopener noreferrer" title="Port registry API (Swagger)"><button class="swagger-nav-btn"><BookOpen size={14} /> API</button></a>
+      <a class="cron-link" href="/cron" title="Scheduled jobs">
+        <button class="cron-nav-btn">
+          <Timer size={14} /> Cron
+          {#if cronStore.jobs.some((j) => j.isRunning)}
+            <span class="cron-active-dot"></span>
+          {/if}
+        </button>
+      </a>
       <a class="export-link" href="/export" title="Export ports"><button class="export-nav-btn"><Download size={14} /> Export</button></a>
       <button class="minimize-btn" onclick={minimizeCursor} disabled={commandsStore.isRunning("minimize")} title="Minimize all Cursor windows">
         <EyeOff size={14} /> {commandsStore.isRunning("minimize") ? "Minimizing…" : "Minimize Cursor"}
@@ -812,7 +832,17 @@
   .access-mode-toggle.network-active { background: rgba(40, 167, 69, 0.15); border-color: rgba(40, 167, 69, 0.5); color: #28a745; }
   .access-mode-toggle.network-active:hover { background: rgba(40, 167, 69, 0.25); }
   .access-mode-label { font-family: "Monaco", "Menlo", monospace; font-size: 11px; }
-  .help-link, .export-link { text-decoration: none; }
+  .help-link, .export-link, .swagger-link, .cron-link { text-decoration: none; }
+  .cron-nav-btn { position: relative; }
+  .cron-active-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #f0ad4e;
+    box-shadow: 0 0 4px rgba(240, 173, 78, 0.6);
+    display: inline-block;
+    animation: pulse 1.5s ease-in-out infinite;
+  }
   .rescan-btn { background: #007bff !important; border-color: #0056b3 !important; color: white !important; }
   .rescan-btn:hover:not(:disabled) { background: #0056b3 !important; }
   .minimize-btn { background: #6c757d !important; border-color: #545b62 !important; color: white !important; }

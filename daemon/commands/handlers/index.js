@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const { execSync } = require("child_process");
 const { killPort } = require("../../shared/lsof");
 const pm2 = require("../../shared/pm2");
 const applescript = require("../../shared/applescript");
@@ -172,6 +173,49 @@ async function handleRescanProjects(cmd, ctx) {
   return { rescanned: true };
 }
 
+async function handlePauseCronJob(cmd) {
+  const { plistPath } = cmd.payload;
+  if (!plistPath) throw new Error("payload.plistPath required");
+  if (!fs.existsSync(plistPath)) throw new Error(`Plist not found: ${plistPath}`);
+  try {
+    execSync(`launchctl unload "${plistPath}"`, { encoding: "utf8", timeout: 10_000 });
+  } catch (err) {
+    if (err.stderr && err.stderr.includes("Could not find specified service")) {
+      return { paused: true, alreadyUnloaded: true };
+    }
+    throw err;
+  }
+  return { paused: true };
+}
+
+async function handleResumeCronJob(cmd) {
+  const { plistPath } = cmd.payload;
+  if (!plistPath) throw new Error("payload.plistPath required");
+  if (!fs.existsSync(plistPath)) throw new Error(`Plist not found: ${plistPath}`);
+  try {
+    execSync(`launchctl load "${plistPath}"`, { encoding: "utf8", timeout: 10_000 });
+  } catch (err) {
+    if (err.stderr && err.stderr.includes("service already loaded")) {
+      return { resumed: true, alreadyLoaded: true };
+    }
+    throw err;
+  }
+  return { resumed: true };
+}
+
+async function handleCronJobLogs(cmd) {
+  const { logFile, lines } = cmd.payload;
+  if (!logFile) throw new Error("payload.logFile required");
+  const lineCount = lines || 100;
+  try {
+    const content = fs.readFileSync(logFile, "utf8");
+    const allLines = content.split("\n");
+    return { logs: allLines.slice(-lineCount).join("\n") };
+  } catch (err) {
+    throw new Error(`Cannot read log file: ${err.message}`);
+  }
+}
+
 const HANDLERS = {
   killPort: handleKillPort,
   killPorts: handleKillPorts,
@@ -190,6 +234,9 @@ const HANDLERS = {
   rescanProjects: handleRescanProjects,
   archiveProject: handleArchiveProject,
   toggleServiceVisibility: handleToggleServiceVisibility,
+  pauseCronJob: handlePauseCronJob,
+  resumeCronJob: handleResumeCronJob,
+  cronJobLogs: handleCronJobLogs,
 };
 
 // Commands that change port/pm2 state. http.js re-snapshots after these so the
@@ -205,4 +252,9 @@ const MUTATING_TYPES = new Set([
   "archiveProject",
 ]);
 
-module.exports = { HANDLERS, MUTATING_TYPES };
+const CRON_MUTATING_TYPES = new Set([
+  "pauseCronJob",
+  "resumeCronJob",
+]);
+
+module.exports = { HANDLERS, MUTATING_TYPES, CRON_MUTATING_TYPES };

@@ -6,6 +6,7 @@ const portsPoller = require("./pollers/ports");
 const pm2Poller = require("./pollers/pm2");
 const gitPoller = require("./pollers/git");
 const ciPoller = require("./pollers/ci");
+const cronPoller = require("./pollers/cron");
 
 let caffeinateProcess = null;
 
@@ -34,14 +35,18 @@ async function main() {
   const refreshers = {
     ports: () => portsPoller.refresh(),
     pm2: () => pm2Poller.refresh(),
+    cron: () => cronPoller.refresh(),
   };
-  http.start(state, refreshers);
+  http.start(state, refreshers, {
+    getProjects: () => projectsPoller.getCurrentProjects(),
+  });
 
   projectsPoller.start(state);
   portsPoller.start(state);
   pm2Poller.start(state);
   gitPoller.start();
   ciPoller.start(state);
+  cronPoller.start(state);
 
   console.log("[daemon] ready");
 }

@@ -101,6 +101,36 @@ export type CIStatus = {
   lastPolled: string;
 };
 
+export type CronRunEntry = {
+  startedAt: string;
+  endedAt: string | null;
+  exitCode: number | null;
+  status: "running" | "success" | "failed" | "skipped" | "unknown";
+  durationMs?: number;
+};
+
+export type CronJob = {
+  id: string;
+  projectId: string;
+  projectName: string;
+  projectDir: string;
+  name: string;
+  description: string | null;
+  label: string;
+  plistPath: string | null;
+  schedule: string;
+  loaded: boolean;
+  launchdPid: number | null;
+  launchdLastExit: number | null;
+  isRunning: boolean;
+  lockAge: number | null;
+  lockPid: number | null;
+  logFile: string | null;
+  latestRun: CronRunEntry | null;
+  recentRuns: CronRunEntry[];
+  lastPolled: string;
+};
+
 export type Command = {
   id: string;
   type: string;

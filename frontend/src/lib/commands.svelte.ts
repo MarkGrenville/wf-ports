@@ -17,7 +17,10 @@ export type CommandType =
   | "executeStartAllTasks"
   | "rescanProjects"
   | "archiveProject"
-  | "toggleServiceVisibility";
+  | "toggleServiceVisibility"
+  | "pauseCronJob"
+  | "resumeCronJob"
+  | "cronJobLogs";
 
 export type DispatchOptions = {
   timeoutMs?: number;

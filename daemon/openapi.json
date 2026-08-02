@@ -1,0 +1,307 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "PortIO Port Registry API",
+    "description": "PortIO is the **local development port authority** for this Mac. Many projects run at once (frontends, Firebase emulators, APIs, PM2 processes). They must not share the same TCP ports — conflicts cause flaky startups, wrong apps answering, and hard-to-debug failures.\n\n## Why you are here\n\nIf you are an agent or another platform setting up (or retargeting) a project's local ports, **do not invent port numbers**. Ask PortIO first, claim what you need, then write those numbers into the project (dev scripts, emulator config, and `.webfootprint/ports.json`).\n\nDashboard UI: `http://localhost:3850` · This API / Swagger: `http://127.0.0.1:3853`\n\n## Two complementary sources of truth\n\n1. **This registry (claims)** — reservations for ports you are about to use. Persisted on disk by the PortIO daemon. Use `GET /api/ports/next` to suggest free ports, then `POST /api/ports/claim` to reserve them.\n2. **Per-project `.webfootprint/ports.json`** (or legacy `wf-ports.json`) — what PortIO monitors on the dashboard (live status, kill buttons, export/duplicates). Claiming via this API does **not** rewrite that file; update it after you claim.\n\nThere is **no Firebase / remote DB** in PortIO. Live UI state is in-memory over WebSocket; claims alone are persisted locally.\n\n## What counts as \"taken\"\n\nWhen suggesting or claiming, PortIO excludes:\n- Always-blocked ports (entire `0–1023` plus common services like MySQL/Redis/AirPlay/8080 — see `GET /api/ports/blocked`)\n- Ports already declared in any scanned project's `ports.json`\n- Ports already claimed in this registry\n- Ports currently listening on the machine (`lsof`)\n\n## Recommended workflow for another project\n\n1. `GET /api/ports/conflicts` — see existing duplicate declarations (fix those first if your project is listed).\n2. `GET /api/ports` or `GET /api/ports/next?count=N&from=4000` — learn what is free.\n3. `POST /api/ports/claim` with `{ \"projectId\": \"<your-project-id>\", \"service\": \"Frontend\", \"count\": N }` (or a specific `\"port\"`).\n4. Put the returned ports into your app config **and** into `<project>/.webfootprint/ports.json` so PortIO can monitor them.\n5. `DELETE /api/ports/claim/{port}` only if you abandon a reservation you no longer need.\n\n## Quick examples\n\n```bash\n# Suggest 3 free ports starting at 4000\ncurl 'http://127.0.0.1:3853/api/ports/next?count=3&from=4000'\n\n# Claim them for your project\ncurl -X POST http://127.0.0.1:3853/api/ports/claim \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"projectId\":\"my-app\",\"service\":\"Frontend\",\"count\":1,\"from\":4000}'\n```\n\nConflict responses return **409** when the requested port is blocked, declared, claimed, or already listening.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:3853",
+      "description": "Local portio-daemon"
+    }
+  ],
+  "paths": {
+    "/api/ports": {
+      "get": {
+        "summary": "List all known ports",
+        "description": "Union of declared project ports, registry claims, curated blocked ports, and currently listening ports.",
+        "operationId": "listPorts",
+        "responses": {
+          "200": {
+            "description": "Port inventory",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": { "type": "boolean" },
+                    "ports": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/PortEntry" }
+                    },
+                    "blockedRange": {
+                      "type": "object",
+                      "properties": {
+                        "from": { "type": "integer" },
+                        "to": { "type": "integer" }
+                      }
+                    },
+                    "claims": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/Claim" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ports/conflicts": {
+      "get": {
+        "summary": "List declared port conflicts",
+        "operationId": "listConflicts",
+        "responses": {
+          "200": {
+            "description": "Ports declared by more than one project/service",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": { "type": "boolean" },
+                    "duplicatePorts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "port": { "type": "integer" },
+                          "usedBy": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "project": { "type": "string" },
+                                "service": { "type": "string" }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ports/blocked": {
+      "get": {
+        "summary": "List always-unavailable ports",
+        "operationId": "listBlocked",
+        "responses": {
+          "200": {
+            "description": "System range plus curated blocked ports",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": { "type": "boolean" },
+                    "systemRange": {
+                      "type": "object",
+                      "properties": {
+                        "from": { "type": "integer" },
+                        "to": { "type": "integer" }
+                      }
+                    },
+                    "systemHighlights": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "port": { "type": "integer" },
+                          "label": { "type": "string" }
+                        }
+                      }
+                    },
+                    "ports": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "port": { "type": "integer" },
+                          "label": { "type": "string" },
+                          "source": { "type": "string" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ports/next": {
+      "get": {
+        "summary": "Suggest free port(s) without claiming",
+        "operationId": "suggestNext",
+        "parameters": [
+          {
+            "name": "count",
+            "in": "query",
+            "schema": { "type": "integer", "default": 1, "minimum": 1, "maximum": 50 }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "schema": { "type": "integer", "default": 4000, "minimum": 1, "maximum": 65535 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Suggested free ports",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": { "type": "boolean" },
+                    "ports": {
+                      "type": "array",
+                      "items": { "type": "integer" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": { "description": "No free ports found in range" }
+        }
+      }
+    },
+    "/api/ports/claim": {
+      "post": {
+        "summary": "Claim a port (specific or auto-allocate)",
+        "operationId": "claimPort",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ClaimRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Claim created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": { "type": "boolean" },
+                    "claims": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/Claim" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "Missing projectId or bad request" },
+          "409": { "description": "Requested port unavailable" }
+        }
+      }
+    },
+    "/api/ports/claim/{port}": {
+      "delete": {
+        "summary": "Release a claim",
+        "operationId": "releaseClaim",
+        "parameters": [
+          {
+            "name": "port",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Claim released",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": { "type": "boolean" },
+                    "port": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          },
+          "404": { "description": "No claim for that port" }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Claim": {
+        "type": "object",
+        "properties": {
+          "port": { "type": "integer" },
+          "projectId": { "type": "string" },
+          "service": { "type": "string", "nullable": true },
+          "claimedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "ClaimRequest": {
+        "type": "object",
+        "required": ["projectId"],
+        "properties": {
+          "projectId": {
+            "type": "string",
+            "description": "Project id that will use the port"
+          },
+          "service": {
+            "type": "string",
+            "description": "Optional service name (e.g. Frontend)"
+          },
+          "port": {
+            "type": "integer",
+            "description": "Specific port to claim; omit to auto-allocate"
+          },
+          "count": {
+            "type": "integer",
+            "default": 1,
+            "description": "How many ports to auto-allocate when port is omitted"
+          },
+          "from": {
+            "type": "integer",
+            "default": 4000,
+            "description": "Start scanning from this port when auto-allocating"
+          }
+        }
+      },
+      "PortEntry": {
+        "type": "object",
+        "properties": {
+          "port": { "type": "integer" },
+          "source": {
+            "type": "string",
+            "enum": ["declared", "claimed", "blocked", "listening"]
+          },
+          "label": { "type": "string" },
+          "usedBy": { "type": "array", "items": { "type": "object" } },
+          "claim": { "$ref": "#/components/schemas/Claim" },
+          "listening": {
+            "type": "object",
+            "properties": {
+              "pid": { "type": "integer" },
+              "command": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

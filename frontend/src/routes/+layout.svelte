@@ -7,6 +7,7 @@
   import { portioDocsStore, usedPortsStore } from "$lib/stores/system.svelte";
   import { networkStore } from "$lib/stores/network.svelte";
   import { ciStore } from "$lib/stores/ci.svelte";
+  import { cronStore } from "$lib/stores/cron.svelte";
 
   let { children } = $props();
 
@@ -18,6 +19,7 @@
     usedPortsStore.start();
     networkStore.start();
     ciStore.start();
+    cronStore.start();
     return () => {
       projectsStore.stop();
       liveStatusStore.stop();
@@ -26,6 +28,7 @@
       usedPortsStore.stop();
       networkStore.stop();
       ciStore.stop();
+      cronStore.stop();
     };
   });
 </script>

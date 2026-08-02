@@ -21,6 +21,9 @@
 # auto-generated documentation
 /portio-docs.md
 
+# persisted port claims (seeded at runtime)
+/daemon/data/
+
 # misc
 .DS_Store
 .env
