@@ -1,18 +1,9 @@
 const { formatBlockedMarkdown } = require("./blocked-ports");
 
-function buildPortioDocsMarkdown(projects) {
-  const allPorts = [];
-  for (const project of projects) {
-    if (Array.isArray(project.services)) {
-      for (const service of project.services) {
-        if (typeof service.port === "number" && !allPorts.includes(service.port)) {
-          allPorts.push(service.port);
-        }
-      }
-    }
-  }
-  allPorts.sort((a, b) => a - b);
-
+// Static integration instructions. Deliberately free of live state so the
+// daemon can serve it over plain HTTP the moment it boots, before the first
+// project scan finishes. Live numbers live behind GET /api/ports.
+function buildPortioDocsMarkdown() {
   return `# PortIO Reference
 
 PortIO is the local development manager for this Mac. It tracks ports, PM2 processes, scheduled jobs, and git/CI status across all projects under \`~/Projects\`. Dashboard: \`http://localhost:3850\`. Daemon API: \`http://127.0.0.1:3853\`.
@@ -21,9 +12,23 @@ Everything runs locally. No database. The daemon holds live state in-memory and 
 
 ---
 
+## Reading this document from a script
+
+This page is static text. No auth, no WebSocket, no JavaScript, no waiting for a scan.
+
+\`\`\`bash
+curl http://127.0.0.1:3853/docs        # this markdown
+curl http://127.0.0.1:3853/docs.json   # {"ok":true,"markdown":"..."}
+curl http://localhost:3850/help.md     # same markdown, via the dashboard port
+\`\`\`
+
+\`curl http://localhost:3850/help\` also returns markdown, because the dev server answers that path with plain text for any client that does not ask for HTML. Browsers get the rendered page.
+
+---
+
 ## Port Registry API
 
-**Do not guess port numbers.** Claim them through the PortIO daemon so they don't conflict with the ${allPorts.length} ports already in use across ${projects.length} projects.
+**Do not guess port numbers.** Dozens of projects under \`~/Projects\` already declare ports; claim through the PortIO daemon so you don't collide with them.
 
 Swagger UI: \`http://127.0.0.1:3853/api-docs\`
 OpenAPI spec: \`http://127.0.0.1:3853/openapi.json\`
@@ -61,7 +66,12 @@ curl -X DELETE http://127.0.0.1:3853/api/ports/claim/4001
 
 ### Currently used ports
 
-${allPorts.join(", ")}
+Not listed here, because this document is static. For the live list:
+
+\`\`\`bash
+curl http://127.0.0.1:3853/api/ports          # every declared, claimed, blocked and listening port
+curl http://127.0.0.1:3853/api/ports/conflicts # ports declared twice
+\`\`\`
 
 ---
 
@@ -102,8 +112,9 @@ On connect the daemon sends a full snapshot: \`{"type":"snapshot","data":{...}}\
 | \`ciStatus\` | 30s (15s when active) | GitHub Actions runs per project |
 | \`cronJobs\` | 10s | Scheduled launchd job status, run history |
 | \`network\` | once | LAN IP and daemon port |
-| \`portioDocs\` | on rescan | This documentation (markdown) |
 | \`usedPortsExport\` | on rescan | Aggregated port data for export |
+
+This documentation is **not** a WebSocket topic. Fetch it over HTTP (\`GET /docs\`) instead.
 
 ---
 

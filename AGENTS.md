@@ -23,7 +23,7 @@ Browser (Chrome :3850)
   --> GET/POST /api/ports* -- port registry (Swagger at /api-docs)
 
 portio-daemon
-  -- in-memory state hub (daemon/state.js): topics projects/liveStatus/pm2/portioDocs/usedPortsExport/ciStatus
+  -- in-memory state hub (daemon/state.js): topics projects/liveStatus/pm2/usedPortsExport/ciStatus/cronJobs/network
   -- port registry (daemon/data/port-registry.json) -- persisted claims
   -- lsof / pm2 / osascript ---------------------------> macOS + ~/Projects/*
   -- GitHub Actions API (ci poller) ------------------> api.github.com (needs GITHUB_TOKEN env var)
@@ -47,6 +47,19 @@ Swagger UI: `http://127.0.0.1:3853/api-docs` (also linked as **API** in the dash
 | `POST` | `/api/ports/claim` | `{ projectId, service?, port?, count?, from? }` — persist claim |
 | `DELETE` | `/api/ports/claim/:port` | Release a claim |
 
+## Docs API (static, curl-able)
+
+The reference docs are plain static markdown built by `daemon/shared/docs.js` and served over HTTP. They are **not** a WebSocket topic and do not depend on the project scan, so they are available the moment the daemon boots.
+
+| URL | Returns |
+|---|---|
+| `http://127.0.0.1:3853/docs` (or `/docs.md`) | `text/markdown` |
+| `http://127.0.0.1:3853/docs.json` | `{ ok, markdown }` |
+| `http://localhost:3850/help.md` (or `/help.txt`) | same markdown, via the dev server |
+| `http://localhost:3850/help` | markdown for clients that don't accept HTML (curl, agents), rendered page for browsers |
+
+The 3850 variants are handled by a small Vite middleware in `frontend/vite.config.ts` that proxies to the daemon. The `/help` page itself fetches `/docs` once on mount; it does not subscribe to a live topic.
+
 When finding/claiming a port, the daemon excludes: always-blocked ports, ports declared in scanned project configs, registry claims, and currently listening ports (lsof). Persistence file is gitignored under `daemon/data/`.
 
 ## State model (in-memory topics in daemon/state.js)
@@ -56,7 +69,6 @@ When finding/claiming a port, the daemon excludes: always-blocked ports, ports d
 | `projects` | daemon (rescan + git merge) | UI | Project[] — config + git/firebase/vscode/favicon |
 | `liveStatus` | daemon (1 s poll) | UI | `{ id, services }[]` — per-project port status |
 | `pm2` | daemon (2 s poll) | UI | Pm2Process[] (CPU/memory dropped to keep diffs stable) |
-| `portioDocs` | daemon (rescan) | UI (`/help`) | Generated markdown |
 | `usedPortsExport` | daemon (rescan) | UI (`/export`) | Aggregated port export |
 | `ciStatus` | daemon (30 s / 15 s adaptive) | UI | `CIStatus[]` — GitHub Actions workflow runs per project |
 
@@ -68,11 +80,11 @@ Live topics are **in-memory** — a daemon restart rebuilds them within ~1 s. Cl
 daemon/
   index.js              entry: starts caffeinate, http + websocket, 5 pollers
   state.js              in-memory topic hub (diff + broadcast)
-  http.js               Express + ws on :3853: POST /cmd, GET /health, /ws, /api/ports*, /api-docs
-  openapi.json          OpenAPI 3 spec for the port registry
+  http.js               Express + ws on :3853: POST /cmd, GET /health, /ws, /api/ports*, /api-docs, /docs
+  openapi.json          OpenAPI 3 spec for the port registry + docs endpoints
   data/port-registry.json  persisted claims (gitignored, created on first claim)
   pollers/
-    projects.js         5 min + chokidar -> "projects" + "portioDocs" + "usedPortsExport"; owns git merge
+    projects.js         5 min + chokidar -> "projects" + "usedPortsExport"; owns git merge
     ports.js            1 s -> "liveStatus" via a single lsof snapshot
     pm2.js              2 s -> "pm2"
     git.js             30 s -> feeds gitInfo back into projects.js
@@ -92,17 +104,18 @@ frontend/
     liveStatus.svelte.ts         socket.onTopic("liveStatus")
     pm2.svelte.ts                socket.onTopic("pm2")
     ci.svelte.ts                 socket.onTopic("ciStatus") — GitHub Actions runs per project
-    system.svelte.ts             portioDocs + usedPortsExport topics
-  src/lib/commands.svelte.ts     dispatch(type, payload) -> POST /cmd; optimistic hidden ports/pm2
+    system.svelte.ts             usedPortsExport topic
+  src/lib/commands.svelte.ts     dispatch(type, payload) -> POST /cmd; daemonBase(); optimistic hidden ports/pm2
   src/routes/+layout.svelte      starts/stops all stores
   src/routes/+page.svelte        dashboard (includes API/Swagger link)
-  src/routes/help/+page.svelte   markdown render
+  src/routes/help/+page.svelte   one-off fetch of daemon /docs, rendered with marked
+  vite.config.ts                 serves /help.md, /help.txt and non-HTML /help as raw markdown
   src/routes/export/+page.svelte tabs over usedPortsExport
 ```
 
 ## Important Patterns
 
-- The Svelte UI is **store-driven**. Data shown comes from a `$state`-backed reactive store wrapping a WebSocket topic subscription. Never `fetch()` JSON state (except one-off agent tooling against the port registry REST API).
+- The Svelte UI is **store-driven**. Data shown comes from a `$state`-backed reactive store wrapping a WebSocket topic subscription. Never `fetch()` JSON state (except one-off agent tooling against the port registry REST API, and the `/help` page which fetches static docs once).
 - The WebSocket client (`socket.svelte.ts`) replays the last value to late subscribers, so stores get data immediately whether they subscribe before or after connect.
 - Every mutation goes through `commandsStore.run(key, type, payload)` which POSTs to the daemon's localhost HTTP. The `key` doubles as the in-flight UI flag (`commandsStore.isRunning(key)`). Kills/deletes also call `setPortsHidden` / `setPm2Hidden` for optimistic feedback, cleared when the command resolves.
 - The daemon's command handlers live in [daemon/commands/handlers/index.js](daemon/commands/handlers/index.js), dispatched by `http.js` via the `HANDLERS` map. Types in `MUTATING_TYPES` trigger an immediate ports + pm2 re-snapshot.

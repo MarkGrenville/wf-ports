@@ -21,7 +21,6 @@ class SystemDocStore<T> {
   }
 }
 
-export const portioDocsStore = new SystemDocStore<{ markdown: string; lastGenerated?: unknown }>("portioDocs");
 export const usedPortsStore = new SystemDocStore<{
   summary: { totalProjects: number; totalPorts: number; uniquePorts: number; lastScanned: string };
   allPorts: number[];

@@ -5,6 +5,7 @@ const swaggerUi = require("swagger-ui-express");
 const { Server: WebSocketServer } = require("ws");
 const { HANDLERS, MUTATING_TYPES, CRON_MUTATING_TYPES } = require("./commands/handlers");
 const registry = require("./shared/port-registry");
+const { buildPortioDocsMarkdown } = require("./shared/docs");
 
 const PORT = Number(process.env.PORTIO_DAEMON_HTTP_PORT || 3853);
 const HOST = process.env.PORTIO_DAEMON_HOST || "0.0.0.0";
@@ -32,6 +33,18 @@ function start(state, refreshers = {}, deps = {}) {
 
   app.get("/health", (_req, res) => {
     res.json({ ok: true, types: Object.keys(HANDLERS) });
+  });
+
+  // Static integration docs over plain HTTP so scripts and agents can curl
+  // them. Not a WebSocket topic and not dependent on the project scan.
+  const DOCS_MARKDOWN = buildPortioDocsMarkdown();
+
+  app.get(["/docs", "/docs.md"], (_req, res) => {
+    res.type("text/markdown; charset=utf-8").send(DOCS_MARKDOWN);
+  });
+
+  app.get("/docs.json", (_req, res) => {
+    res.json({ ok: true, markdown: DOCS_MARKDOWN });
   });
 
   app.get("/api/ports", async (_req, res) => {

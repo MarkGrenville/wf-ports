@@ -29,7 +29,7 @@ portio-daemon
       ports      1 s   -> one `lsof` snapshot of all listeners -> state "liveStatus"
       pm2        2 s   -> `pm2 jlist` -> state "pm2"
       git       30 s   -> merges into the "projects" topic (per-project gitInfo)
-      projects   5 m + chokidar -> state "projects" + "portioDocs" + "usedPortsExport"
+      projects   5 m + chokidar -> state "projects" + "usedPortsExport"
   - pushes a full snapshot on WebSocket connect, then per-topic diffs on change
   - exposes POST http://127.0.0.1:3853/cmd that runs HANDLERS synchronously;
     after a mutating command it re-snapshots ports + pm2 immediately so the UI
@@ -57,9 +57,9 @@ portio-daemon
 daemon/
   index.js                  entry: starts http + WebSocket + 4 pollers
   state.js                  in-memory topic hub (diff + broadcast)
-  http.js                   Express + ws on 127.0.0.1:3853: POST /cmd, GET /health, /ws
+  http.js                   Express + ws on 127.0.0.1:3853: POST /cmd, GET /health, /ws, /docs
   pollers/
-    projects.js             5 min + chokidar -> "projects", "portioDocs", "usedPortsExport"; owns git merge
+    projects.js             5 min + chokidar -> "projects", "usedPortsExport"; owns git merge
     ports.js                1 s -> "liveStatus" via a single lsof snapshot
     pm2.js                  2 s -> "pm2"
     git.js                 30 s -> feeds gitInfo back into projects.js
@@ -77,7 +77,11 @@ daemon/
 | snapshot | `{ type: "snapshot", data: { [topic]: value } }` | once, on connect |
 | update | `{ type: "update", topic, data }` | whenever a topic changes |
 
-Topics: `projects` (Project[]), `liveStatus` ({ id, services }[]), `pm2` (Pm2Process[]), `portioDocs` ({ markdown }), `usedPortsExport` (export object).
+Topics: `projects` (Project[]), `liveStatus` ({ id, services }[]), `pm2` (Pm2Process[]), `usedPortsExport` (export object).
+
+## Docs endpoints
+
+`GET /docs` (or `/docs.md`) returns the static reference markdown; `GET /docs.json` wraps it as `{ ok, markdown }`. Built once at boot from `shared/docs.js`, with no dependency on the project scan, so scripts can curl it immediately.
 
 ## Command types
 

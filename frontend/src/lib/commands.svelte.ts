@@ -28,7 +28,7 @@ export type DispatchOptions = {
 
 const DAEMON_PORT = 3853;
 
-function daemonBase(): string {
+export function daemonBase(): string {
   if (typeof window === "undefined") return `http://127.0.0.1:${DAEMON_PORT}`;
   return `http://${window.location.hostname}:${DAEMON_PORT}`;
 }

@@ -2,7 +2,7 @@ const path = require("path");
 const os = require("os");
 const chokidar = require("chokidar");
 const { scanAllProjects } = require("../shared/scan");
-const { buildPortioDocsMarkdown, buildUsedPortsExport } = require("../shared/docs");
+const { buildUsedPortsExport } = require("../shared/docs");
 
 const PROJECTS_BASE_PATH =
   process.env.PROJECTS_BASE_PATH || path.join(os.homedir(), "Projects");
@@ -46,10 +46,9 @@ async function rescanAndWrite(state) {
     }
 
     publishProjects();
-    stateRef.set("portioDocs", { markdown: buildPortioDocsMarkdown(projects) });
     stateRef.set("usedPortsExport", buildUsedPortsExport(projects));
 
-    console.log(`[projects] published ${projects.length} projects + system docs`);
+    console.log(`[projects] published ${projects.length} projects + port export`);
   } catch (err) {
     console.error("[projects] rescan failed:", err.message);
   } finally {

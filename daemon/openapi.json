@@ -241,6 +241,43 @@
           "404": { "description": "No claim for that port" }
         }
       }
+    },
+    "/docs": {
+      "get": {
+        "summary": "PortIO reference documentation (markdown)",
+        "description": "Static integration instructions for other projects, agents and scripts: port registry workflow, command API, WebSocket topics, and the `.webfootprint` config formats. Served instantly, independent of the project scan. Also available as `/docs.md`, and as `http://localhost:3850/help.md` via the dashboard dev server.",
+        "operationId": "getDocs",
+        "responses": {
+          "200": {
+            "description": "Markdown document",
+            "content": {
+              "text/markdown": { "schema": { "type": "string" } }
+            }
+          }
+        }
+      }
+    },
+    "/docs.json": {
+      "get": {
+        "summary": "PortIO reference documentation (JSON envelope)",
+        "operationId": "getDocsJson",
+        "responses": {
+          "200": {
+            "description": "Markdown wrapped in JSON",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": { "type": "boolean" },
+                    "markdown": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
